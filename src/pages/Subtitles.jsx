@@ -1,0 +1,558 @@
+import { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { transcribeVideo } from "@/functions/transcribeVideo";
+import {
+  Upload,
+  Video,
+  FileText,
+  Download,
+  Edit3,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Cpu,
+  Circle,
+  Mic,
+  Languages
+} from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { InvokeLLM } from "@/integrations/Core";
+
+const MAX_FILE_SIZE_MB = 25; // OpenAI Whisper limit
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const AGENT_STEPS = [
+  { id: 1, message: "Initializing AI transcription agent..." },
+  { id: 2, message: "Uploading file to OpenAI processing servers...", action: 'upload' },
+  { id: 3, message: "Extracting audio track..." },
+  { id: 4, message: "Running OpenAI Whisper speech-to-text model...", action: 'transcribe' },
+  { id: 5, message: "Analyzing speech patterns and creating timestamps..." },
+  { id: 6, message: "Converting transcription to SRT subtitle format..." },
+  { id: 7, message: "Finalizing subtitles and preparing download..." },
+];
+
+export default function Subtitles() {
+  const [file, setFile] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [agentStep, setAgentStep] = useState(-1);
+  const [subtitles, setSubtitles] = useState("");
+  const [editedSubtitles, setEditedSubtitles] = useState("");
+  const [error, setError] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [transcriptionInfo, setTranscriptionInfo] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const [translateTarget, setTranslateTarget] = useState("arabic");
+  const [dialect, setDialect] = useState("msa");
+  const [isTranslatingSub, setIsTranslatingSub] = useState(false);
+
+  const supportedFormats = [
+    'video/mp4', 'video/mov', 'video/avi', 'video/x-msvideo', 'video/quicktime', 'video/x-matroska',
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/m4a', 'audio/x-m4a', 'audio/ogg', 'audio/webm'
+  ];
+
+  const arabicDialects = [
+    { value: "msa", label: "Modern Standard (Fusha)" },
+    { value: "egyptian", label: "Egyptian" },
+    { value: "levantine", label: "Levantine (Shami)" },
+    { value: "gulf", label: "Gulf (Khaleeji)" },
+    { value: "maghrebi", label: "Maghrebi (Morocco/Algeria/Tunisia)" },
+    { value: "iraqi", label: "Iraqi" },
+    { value: "sudanese", label: "Sudanese" },
+    { value: "yemeni", label: "Yemeni" }
+  ];
+
+  const progressPercent = processing && agentStep >= 0
+    ? Math.min(100, Math.round(((agentStep + 1) / AGENT_STEPS.length) * 100))
+    : 0;
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) {
+      validateAndSetFile(droppedFile);
+    }
+  };
+
+  const handleFileInput = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      validateAndSetFile(selectedFile);
+    }
+  };
+
+  const validateAndSetFile = (selectedFile) => {
+    if (!supportedFormats.includes(selectedFile.type)) {
+      setError("Please upload a supported video or audio format (MP4, MOV, AVI, MKV, MP3, WAV, M4A, OGG)");
+      return;
+    }
+    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+      setError(`File is too large. Please upload a file under ${MAX_FILE_SIZE_MB} MB for OpenAI Whisper processing.`);
+      return;
+    }
+    setFile(selectedFile);
+    setError(null);
+  };
+
+  const runAgentStep = async (stepIndex) => {
+    setAgentStep(stepIndex);
+    const step = AGENT_STEPS[stepIndex];
+    if (!step.action) {
+      await new Promise(res => setTimeout(res, 1500));
+    }
+  };
+
+  const processVideo = async () => {
+    if (!file) return;
+
+    setProcessing(true);
+    setAgentStep(0);
+    setError(null);
+    setSubtitles("");
+    setEditedSubtitles("");
+    setTranscriptionInfo(null);
+
+    try {
+      // Step 1: Initialize
+      await runAgentStep(0);
+
+      // Step 2: Upload and process
+      await runAgentStep(1);
+
+      // Create FormData to send file
+      const formData = new FormData();
+      formData.append('video', file);
+
+      // Step 3-4: Extract audio and transcribe
+      await runAgentStep(2);
+      await runAgentStep(3);
+
+      // Call our backend function
+      const response = await transcribeVideo(formData);
+
+      if (response.data.error) {
+        throw new Error(response.data.error);
+      }
+
+      // Step 5-7: Format and finalize
+      await runAgentStep(4);
+      await runAgentStep(5);
+      await runAgentStep(6);
+
+      const result = response.data;
+      setSubtitles(result.subtitles);
+      setEditedSubtitles(result.subtitles);
+      setTranscriptionInfo({
+        duration: result.duration,
+        language: result.language,
+        segments: result.subtitles.split('\n\n').length
+      });
+
+    } catch (error) {
+      console.error("Transcription error:", error);
+      setError(error.message || "Failed to transcribe file. Please check your file and try again.");
+      setAgentStep(-1);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const downloadSubtitles = (format) => {
+    if (!editedSubtitles) return;
+
+    let content = editedSubtitles;
+    let filename = `${file?.name?.replace(/\.[^/.]+$/, "") || "subtitles"}.${format}`;
+    let mimeType = 'text/plain';
+
+    if (format === 'vtt') {
+      content = 'WEBVTT\n\n' + content.replace(/(\d+)\n/g, '').replace(/,/g, '.');
+      mimeType = 'text/vtt';
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const resetProcess = () => {
+    setFile(null);
+    setSubtitles("");
+    setEditedSubtitles("");
+    setAgentStep(-1);
+    setError(null);
+    setIsEditing(false);
+    setProcessing(false);
+    setTranscriptionInfo(null);
+    setTranslateTarget("arabic");
+    setDialect("msa");
+    setIsTranslatingSub(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const translateSubtitles = async () => {
+    if (!editedSubtitles.trim()) return;
+    setIsTranslatingSub(true);
+    setError(null);
+
+    try {
+      const dialectText = translateTarget === 'arabic'
+        ? `
+Arabic Dialect: ${arabicDialects.find(d => d.value === dialect)?.label || dialect}.
+Use authentic phrasing of this dialect while remaining clear for broad audiences.
+`
+        : '';
+
+      const prompt = `
+Translate the subtitle text within the following SRT content to ${translateTarget}.
+- Keep all SRT numbering and timestamp lines EXACTLY as they are.
+- Translate ONLY the dialogue text lines (the lines after the timestamps).
+- Do not add, remove, merge, or split segments.
+- Preserve existing line breaks and keep punctuation natural.
+${dialectText}
+
+Original SRT:
+"""
+${editedSubtitles}
+"""
+
+Return only the translated SRT content, with timestamps untouched.
+`;
+      const result = await InvokeLLM({
+        prompt,
+        add_context_from_internet: false
+      });
+
+      setEditedSubtitles(result.trim());
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Translation error:", err);
+      setError("Failed to translate subtitles. Please try again.");
+    } finally {
+      setIsTranslatingSub(false);
+    }
+  };
+
+  const AgentProgress = () => (
+    <div className="space-y-3 p-4 bg-gray-900 rounded-xl border border-gray-800">
+      {/* Thin progress bar for smoothness */}
+      <div className="h-1 w-full bg-gray-800 rounded overflow-hidden mb-1">
+        <div
+          className="h-1 bg-yellow-400 transition-all duration-500 ease-out"
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center">
+          <Cpu className="w-4 h-4 text-yellow-400" />
+        </div>
+        <div>
+          <h4 className="font-semibold text-white">OpenAI Whisper Agent</h4>
+          <p className="text-sm text-gray-400">Transcribing your file...</p>
+        </div>
+      </div>
+
+      {AGENT_STEPS.map((step, index) => {
+        const isCompleted = agentStep > index;
+        const isInProgress = agentStep === index;
+
+        return (
+          <div key={step.id} className={`flex items-center gap-3 p-2 rounded-lg transition-all ${
+            isCompleted ? 'bg-green-900/20' : isInProgress ? 'bg-yellow-900/20' : 'bg-gray-900'
+          }`}>
+            {isCompleted ? (
+              <CheckCircle className="w-4 h-4 text-green-400" />
+            ) : isInProgress ? (
+              <Loader2 className="w-4 h-4 text-yellow-400 animate-spin" />
+            ) : (
+              <Circle className="w-4 h-4 text-gray-600" />
+            )}
+            <span className={`text-sm ${
+              isCompleted ? 'text-green-400' : isInProgress ? 'font-medium text-yellow-400' : 'text-gray-500'
+            }`}>
+              {step.message}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-black text-gray-300">
+      <div className="max-w-6xl mx-auto section-fade">
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6 border text-yellow-400"
+               style={{ borderColor: 'rgba(245,217,10,0.35)', background: 'rgba(245,217,10,0.08)' }}>
+            <Mic className="w-4 h-4" />
+            <span className="text-sm font-medium">OpenAI Whisper Integration</span>
+          </div>
+          <h1 className="text-4xl font-bold text-white mb-4">AI Audio & Video Transcription</h1>
+          <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+            Upload your video or audio file and our AI will extract all spoken words with precise timestamps using OpenAI's Whisper
+          </p>
+        </div>
+
+        {error && (
+          <Alert variant="destructive" className="mb-8 max-w-2xl mx-auto bg-red-900 border-red-700 text-red-200">
+            <AlertCircle className="h-4 w-4 text-red-400" />
+            <AlertDescription className="text-red-300">{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid lg:grid-cols-2 gap-8">
+          <Card className="glass-effect border-0 shadow-xl bg-gray-900">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Upload className="w-5 h-5 text-yellow-400" />
+                Upload Video or Audio
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!file ? (
+                <div
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                    dragActive ? 'border-yellow-400 bg-gray-800' : 'border-gray-700 hover:border-gray-600'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/*,audio/*"
+                    onChange={handleFileInput}
+                    className="hidden"
+                  />
+                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Video className="w-8 h-8 text-yellow-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-2">Drop your video or audio here</h3>
+                  <p className="text-gray-400 mb-4">or click to browse</p>
+                  <Button onClick={() => fileInputRef.current?.click()}
+                          className="bg-yellow-500 hover:bg-yellow-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Choose File
+                  </Button>
+                  <div className="mt-4 text-sm text-gray-500">
+                    Supported: MP4, MOV, AVI, MKV, MP3, WAV, M4A, OGG. Max size: {MAX_FILE_SIZE_MB}MB
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-gray-900 rounded-xl border border-gray-700">
+                    <Video className="w-8 h-8 text-yellow-400" />
+                    <div className="flex-1">
+                      <div className="font-medium text-white">{file.name}</div>
+                      <div className="text-sm text-gray-400">
+                        {(file.size / 1024 / 1024).toFixed(2)} MB
+                      </div>
+                    </div>
+                    {subtitles ? (
+                      <Badge className="bg-green-900 text-green-400 hover:bg-green-800">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Complete
+                      </Badge>
+                    ) : processing ? (
+                      <Badge className="bg-yellow-900 text-yellow-400 hover:bg-yellow-800">
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        Processing
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700">Ready</Badge>
+                    )}
+                  </div>
+
+                  {processing && <AgentProgress />}
+
+                  {transcriptionInfo && (
+                    <div className="p-3 bg-yellow-900/20 border border-yellow-800 rounded-xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CheckCircle className="w-5 h-5 text-yellow-400" />
+                        <span className="text-yellow-300 font-medium">Transcription Complete!</span>
+                      </div>
+                      <div className="text-sm text-yellow-400">
+                        Duration: {Math.round(transcriptionInfo.duration)}s &bull;
+                        Language: {transcriptionInfo.language} &bull;
+                        Segments: {transcriptionInfo.segments}
+                      </div>
+                    </div>
+                  )}
+
+                  {!processing && !subtitles && (
+                    <Button onClick={processVideo} 
+                            className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95">
+                      <Mic className="w-4 h-4 mr-2" />
+                      Transcribe with OpenAI Whisper
+                    </Button>
+                  )}
+
+                  {!processing && (
+                    <Button
+                      variant="outline"
+                      onClick={resetProcess}
+                      className="w-full btn-outline-dark text-white"
+                    >
+                      Process Different File
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="glass-effect border-0 shadow-xl bg-gray-900">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <FileText className="w-5 h-5 text-yellow-400" />
+                Transcribed Subtitles
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {subtitles ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-400">
+                        {editedSubtitles.split('\n\n').length} segments
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditing(!isEditing)}
+                      className="btn-outline-dark text-white"
+                    >
+                      <Edit3 className="w-4 h-4 mr-2" />
+                      {isEditing ? 'Preview' : 'Edit'}
+                    </Button>
+                  </div>
+
+                  {isEditing ? (
+                    <Textarea
+                      value={editedSubtitles}
+                      onChange={(e) => setEditedSubtitles(e.target.value)}
+                      className="min-h-[300px] font-mono text-sm bg-gray-800 text-gray-300 border-gray-700 focus:border-yellow-400"
+                    />
+                  ) : (
+                    <div className="bg-gray-900 rounded-xl p-4 max-h-[300px] overflow-y-auto border border-gray-700">
+                      <pre className="text-sm whitespace-pre-wrap font-mono text-gray-300">
+                        {editedSubtitles}
+                      </pre>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => downloadSubtitles('srt')}
+                      className="flex-1 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download SRT
+                    </Button>
+                    <Button
+                      onClick={() => downloadSubtitles('vtt')}
+                      variant="outline"
+                      className="flex-1 btn-outline-dark text-white"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download VTT
+                    </Button>
+                  </div>
+
+                  {/* Translate Subtitles Panel */}
+                  <div className="mt-2 p-4 bg-gray-900 rounded-xl border border-gray-700">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Languages className="w-4 h-4 text-yellow-400" />
+                      <span className="text-sm text-gray-300">Translate subtitles</span>
+                    </div>
+                    <div className="grid sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-1">
+                        <Select value={translateTarget} onValueChange={setTranslateTarget}>
+                          <SelectTrigger className="bg-black text-white border-gray-700">
+                            <SelectValue placeholder="Target language" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-black border-gray-700 text-white">
+                            <SelectItem value="arabic">Arabic</SelectItem>
+                            <SelectItem value="english">English</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {translateTarget === "arabic" && (
+                        <div className="sm:col-span-1">
+                          <Select value={dialect} onValueChange={setDialect}>
+                            <SelectTrigger className="bg-black text-white border-gray-700">
+                              <SelectValue placeholder="Dialect" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-black border-gray-700 text-white">
+                              {arabicDialects.map((d) => (
+                                <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      <div className="sm:col-span-1">
+                        <Button
+                          onClick={translateSubtitles}
+                          disabled={isTranslatingSub || !editedSubtitles.trim()}
+                          className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black"
+                        >
+                          {isTranslatingSub ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Translating...
+                            </>
+                          ) : (
+                            "Translate"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Timestamps remain untouched; only subtitle text is translated.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-600">
+                  <Mic className="w-12 h-12 mx-auto mb-4 opacity-50 text-gray-700" />
+                  <p>Upload a video or audio file to extract subtitles</p>
+                  <p className="text-sm mt-2 text-gray-600">Powered by OpenAI Whisper</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
