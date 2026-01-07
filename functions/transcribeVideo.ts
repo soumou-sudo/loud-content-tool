@@ -1,5 +1,6 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.7.0';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 import OpenAI from 'npm:openai@4.57.0';
+import { toFile } from 'npm:openai@4.57.0/uploads';
 
 const openai = new OpenAI({
     apiKey: Deno.env.get("OPENAI_API_KEY"),
@@ -15,15 +16,19 @@ Deno.serve(async (req) => {
         }
 
         const formData = await req.formData();
-        const videoFile = formData.get('video');
+        const mediaFile = formData.get('video') || formData.get('audio') || formData.get('file');
         
-        if (!videoFile) {
-            return Response.json({ error: 'No video file provided' }, { status: 400 });
+        if (!mediaFile || typeof mediaFile === 'string') {
+            return Response.json({ error: 'No media file provided' }, { status: 400 });
         }
 
-        // Convert video file to audio using OpenAI Whisper
+        // Ensure uploaded blob is converted to a proper File for OpenAI SDK
+        const filename = (mediaFile && mediaFile.name) ? mediaFile.name : `media.${(mediaFile?.type?.split('/')?.[1] || 'mp3')}`;
+        const fileForOpenAI = await toFile(mediaFile, filename);
+
+        // Transcribe using Whisper with segment timestamps
         const transcription = await openai.audio.transcriptions.create({
-            file: videoFile,
+            file: fileForOpenAI,
             model: "whisper-1",
             response_format: "verbose_json",
             timestamp_granularities: ["segment"]
@@ -59,13 +64,13 @@ Deno.serve(async (req) => {
         // Handle specific OpenAI errors
         if (error.code === 'file_not_supported') {
             return Response.json({ 
-                error: 'Video format not supported. Please try MP4, MOV, or other common formats.' 
+                error: 'File format not supported. Please try common video/audio formats (MP4, MOV, MKV, MP3, WAV, M4A, OGG).' 
             }, { status: 400 });
         }
         
         if (error.code === 'file_too_large') {
             return Response.json({ 
-                error: 'Video file is too large. Please try a smaller file under 25MB.' 
+                error: 'File is too large. Please try a smaller file under 25MB.' 
             }, { status: 400 });
         }
 
