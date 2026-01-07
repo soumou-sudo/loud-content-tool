@@ -15,22 +15,48 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const formData = await req.formData();
-        const mediaFile = formData.get('video') || formData.get('audio') || formData.get('file');
-        
-        if (!mediaFile || typeof mediaFile === 'string') {
+        const contentType = req.headers.get('content-type') || '';
+        let mediaFile = null;
+        let filename = 'media';
+        let mimeType = 'audio/mpeg';
+
+        if (contentType.includes('multipart/form-data')) {
+            const formData = await req.formData();
+            const f = formData.get('video') || formData.get('audio') || formData.get('file');
+            if (f && typeof f !== 'string') {
+                mediaFile = f;
+                filename = f.name || filename;
+                mimeType = f.type || mimeType;
+            }
+        } else {
+            const body = await req.json().catch(() => null);
+            const fileUrl = body?.file_url;
+            filename = body?.filename || filename;
+            mimeType = body?.mime_type || mimeType;
+            if (fileUrl) {
+                const fetched = await fetch(fileUrl);
+                if (!fetched.ok) {
+                    return Response.json({ error: 'Failed to fetch file from URL' }, { status: 400 });
+                }
+                const blob = await fetched.blob();
+                mediaFile = new File([blob], filename, { type: mimeType || blob.type || 'application/octet-stream' });
+            }
+        }
+
+        if (!mediaFile) {
             return Response.json({ error: 'No media file provided' }, { status: 400 });
         }
 
         // Ensure uploaded blob is converted to a proper File for OpenAI SDK
-        const filename = (mediaFile && mediaFile.name) ? mediaFile.name : `media.${(mediaFile?.type?.split('/')?.[1] || 'mp3')}`;
-        const fileForOpenAI = await toFile(mediaFile, filename);
+        const safeName = (mediaFile && mediaFile.name) ? mediaFile.name : filename;
+        const fileForOpenAI = await toFile(mediaFile, safeName);
 
-        // Transcribe using Whisper
+        // Transcribe using Whisper with segment timestamps
         const transcription = await openai.audio.transcriptions.create({
             file: fileForOpenAI,
             model: "whisper-1",
-            response_format: "verbose_json"
+            response_format: "verbose_json",
+            timestamp_granularities: ["segment"]
         });
 
         // Convert OpenAI response to SRT format

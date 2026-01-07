@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { InvokeLLM } from "@/integrations/Core";
+import { InvokeLLM, UploadFile } from "@/integrations/Core";
 
 const MAX_FILE_SIZE_MB = 25; // OpenAI Whisper limit
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -138,16 +138,15 @@ export default function Subtitles() {
       // Step 2: Upload and process
       await runAgentStep(1);
 
-      // Create FormData to send file
-      const formData = new FormData();
-      formData.append('video', file);
-
       // Step 3-4: Extract audio and transcribe
       await runAgentStep(2);
-      await runAgentStep(3);
 
-      // Call our backend function
-      const response = await transcribeVideo(formData);
+      // Upload file first to get a URL (works for both video and audio)
+      const { file_url } = await UploadFile({ file });
+
+      // Proceed to transcription
+      await runAgentStep(3);
+      const response = await transcribeVideo({ file_url, filename: file.name, mime_type: file.type });
 
       if (response.data.error) {
         throw new Error(response.data.error);
