@@ -169,7 +169,8 @@ export default function Subtitles() {
 
     } catch (error) {
       console.error("Transcription error:", error);
-      setError(error.message || "Failed to transcribe file. Please check your file and try again.");
+      const apiMsg = error?.response?.data?.error || error?.response?.data?.details?.message;
+      setError(apiMsg || error.message || "Failed to transcribe file. Please check your file and try again.");
       setAgentStep(-1);
     } finally {
       setProcessing(false);
