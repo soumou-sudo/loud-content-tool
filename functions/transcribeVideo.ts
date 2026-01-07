@@ -26,12 +26,11 @@ Deno.serve(async (req) => {
         const filename = (mediaFile && mediaFile.name) ? mediaFile.name : `media.${(mediaFile?.type?.split('/')?.[1] || 'mp3')}`;
         const fileForOpenAI = await toFile(mediaFile, filename);
 
-        // Transcribe using Whisper with segment timestamps
+        // Transcribe using Whisper
         const transcription = await openai.audio.transcriptions.create({
             file: fileForOpenAI,
             model: "whisper-1",
-            response_format: "verbose_json",
-            timestamp_granularities: ["segment"]
+            response_format: "verbose_json"
         });
 
         // Convert OpenAI response to SRT format
@@ -74,9 +73,9 @@ Deno.serve(async (req) => {
             }, { status: 400 });
         }
 
-        return Response.json({ 
-            error: `Transcription failed: ${error.message}` 
-        }, { status: 500 });
+        const status = (error && (error.status || error.response?.status)) || 500;
+        const details = error?.response?.data || { message: error.message };
+        return Response.json({ error: 'Transcription failed', details }, { status: status >= 400 && status < 600 ? status : 500 });
     }
 });
 
