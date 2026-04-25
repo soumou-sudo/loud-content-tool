@@ -22,6 +22,8 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvokeLLM, UploadFile } from "@/integrations/Core";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const MAX_FILE_SIZE_MB = 25; // OpenAI Whisper limit
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -51,6 +53,8 @@ export default function Subtitles() {
   const [translateTarget, setTranslateTarget] = useState("arabic");
   const [dialect, setDialect] = useState("msa");
   const [isTranslatingSub, setIsTranslatingSub] = useState(false);
+  const [wordsPerSentence, setWordsPerSentence] = useState(8);
+  const [sectionsCount, setSectionsCount] = useState(10);
 
   const supportedFormats = [
     'video/mp4', 'video/mov', 'video/avi', 'video/x-msvideo', 'video/quicktime', 'video/x-matroska',
@@ -255,6 +259,102 @@ Return only the translated SRT content, with timestamps untouched.
     } finally {
       setIsTranslatingSub(false);
     }
+  };
+
+  // SRT utilities and re-segmentation helpers
+  const srtTimeToSeconds = (t) => {
+    const [h, m, rest] = t.split(':');
+    const [s, ms] = rest.split(',');
+    return (+h)*3600 + (+m)*60 + (+s) + (+ms)/1000;
+  };
+  const secondsToSrtTime = (sec) => {
+    const hours = Math.floor(sec / 3600);
+    const minutes = Math.floor((sec % 3600) / 60);
+    const seconds = Math.floor(sec % 60);
+    const ms = Math.round((sec - Math.floor(sec)) * 1000);
+    const pad = (n, l=2) => String(n).padStart(l, '0');
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${pad(ms,3)}`;
+  };
+  const parseSRT = (srt) => {
+    const blocks = (srt || '').trim().split(/\n\s*\n/);
+    const cues = [];
+    for (const block of blocks) {
+      const lines = block.split('\n').map(l => l.trim());
+      if (lines.length < 2) continue;
+      let idx = 0;
+      if (/^\d+$/.test(lines[0])) idx = 1;
+      const timeMatch = lines[idx]?.match(/(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})/);
+      if (!timeMatch) continue;
+      const start = srtTimeToSeconds(timeMatch[1]);
+      const end = srtTimeToSeconds(timeMatch[2]);
+      const text = lines.slice(idx+1).join(' ').replace(/\s+/g,' ').trim();
+      cues.push({ start, end, text });
+    }
+    return cues;
+  };
+  const formatSRT = (cues) => {
+    return cues.map((c, i) => `${i+1}\n${secondsToSrtTime(c.start)} --> ${secondsToSrtTime(c.end)}\n${c.text}\n`).join('\n\n').trim();
+  };
+  const applyWordsPerSentence = () => {
+    const max = Math.max(1, Number(wordsPerSentence) || 1);
+    const cues = parseSRT(editedSubtitles || subtitles || '');
+    if (!cues.length) return;
+    const newCues = [];
+    let groupStart = null;
+    let groupEnd = null;
+    let words = [];
+    for (const cue of cues) {
+      const w = cue.text.split(/\s+/).filter(Boolean);
+      if (groupStart === null) groupStart = cue.start;
+      groupEnd = cue.end;
+      for (const word of w) {
+        words.push(word);
+        if (words.length >= max) {
+          newCues.push({ start: groupStart, end: groupEnd, text: words.join(' ') });
+          words = [];
+          groupStart = null;
+          groupEnd = null;
+        }
+      }
+      // if group reset happened, next loop will set start
+    }
+    if (words.length) {
+      if (groupStart === null) {
+        const last = cues[cues.length - 1];
+        newCues.push({ start: last.start, end: last.end, text: words.join(' ') });
+      } else {
+        newCues.push({ start: groupStart, end: groupEnd ?? groupStart + 1, text: words.join(' ') });
+      }
+    }
+    setEditedSubtitles(formatSRT(newCues));
+    setIsEditing(false);
+  };
+  const applySectionsCount = () => {
+    const n = Math.max(1, Number(sectionsCount) || 1);
+    const cues = parseSRT(editedSubtitles || subtitles || '');
+    if (!cues.length) return;
+    const total = cues.reduce((acc, c) => acc + (c.end - c.start), 0);
+    const target = total / n;
+    const groups = [];
+    let curGroup = [];
+    let curDur = 0;
+    for (const cue of cues) {
+      curGroup.push(cue);
+      curDur += (cue.end - cue.start);
+      if (groups.length < n - 1 && curDur >= target) {
+        groups.push(curGroup);
+        curGroup = [];
+        curDur = 0;
+      }
+    }
+    if (curGroup.length) groups.push(curGroup);
+    const newCues = groups.map(g => ({
+      start: g[0].start,
+      end: g[g.length - 1].end,
+      text: g.map(x => x.text).join(' ').replace(/\s+/g,' ').trim()
+    }));
+    setEditedSubtitles(formatSRT(newCues));
+    setIsEditing(false);
   };
 
   const AgentProgress = () => (
@@ -539,6 +639,39 @@ Return only the translated SRT content, with timestamps untouched.
                     </div>
                     <p className="text-xs text-gray-500 mt-2">
                       Timestamps remain untouched; only subtitle text is translated.
+                    </p>
+                  </div>
+
+                  {/* Resection Controls */}
+                  <div className="mt-2 p-4 bg-gray-900 rounded-xl border border-gray-700">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-sm text-gray-300">Resegment subtitles</span>
+                    </div>
+                    <div className="grid sm:grid-cols-3 gap-3 items-end">
+                      <div className="sm:col-span-1">
+                        <Label htmlFor="wps" className="text-gray-300 text-sm">Words per sentence</Label>
+                        <Input id="wps" type="number" min={1} value={wordsPerSentence} onChange={(e)=>setWordsPerSentence(e.target.value)} className="mt-1 bg-black text-white border-gray-700" />
+                      </div>
+                      <div className="sm:col-span-1">
+                        <Label htmlFor="sections" className="text-gray-300 text-sm">Number of sections</Label>
+                        <Input id="sections" type="number" min={1} value={sectionsCount} onChange={(e)=>setSectionsCount(e.target.value)} className="mt-1 bg-black text-white border-gray-700" />
+                      </div>
+                      <div className="sm:col-span-1 flex gap-2">
+                        <Button onClick={applyWordsPerSentence} disabled={!editedSubtitles.trim()} className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black">
+                          Apply words/line
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid sm:grid-cols-2 gap-2">
+                      <Button variant="outline" onClick={applySectionsCount} disabled={!editedSubtitles.trim()} className="btn-outline-dark text-white">
+                        Apply sections count
+                      </Button>
+                      <Button variant="outline" onClick={()=>setEditedSubtitles(subtitles)} disabled={!subtitles} className="btn-outline-dark text-white">
+                        Reset to original segmentation
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Timestamps are merged across grouped segments to keep sync close to the original.
                     </p>
                   </div>
                 </div>
