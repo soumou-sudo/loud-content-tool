@@ -78,39 +78,29 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black overflow-hidden">
       {/* Hero Section */}
-      <section className="pt-20 pb-24 px-4 sm:px-6 lg:px-8 section-fade border-b border-white/8">
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="max-w-6xl mx-auto grid lg:grid-cols-[1.3fr_0.7fr] gap-10 items-end">
-            <div className="text-left">
-              <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-8 pill">
-                <Sparkles className="w-4 h-4" />
-                <span className="text-sm font-medium tracking-[0.12em] uppercase">Creative Suite</span>
-              </div>
-
-              <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-semibold mb-6 leading-[0.95] tracking-[-0.04em] text-white">
-                Create sharper
-                <span className="block text-white/55">subtitles and captions.</span>
-              </h1>
-
-              <p className="text-base md:text-lg text-gray-300/90 mb-12 max-w-2xl leading-relaxed">
-                A cleaner workflow for transcription, translation, editing, and export — built for modern content teams and creators.
-              </p>
-            </div>
-
-            <div className="premium-panel rounded-[32px] p-6 lg:p-8 text-left border border-white/10">
-              <div className="text-xs uppercase tracking-[0.18em] text-white/50 mb-4">What you can do</div>
-              <div className="space-y-4 text-sm text-white/80">
-                <div className="flex items-start gap-3 border-b border-white/8 pb-4"><span className="text-white">01</span><span>Generate timestamped subtitles from audio or video.</span></div>
-                <div className="flex items-start gap-3 border-b border-white/8 pb-4"><span className="text-white">02</span><span>Translate captions with better control over tone and style.</span></div>
-                <div className="flex items-start gap-3"><span className="text-white">03</span><span>Review, refine, and export in a clean workspace.</span></div>
-              </div>
-            </div>
+      <section className="relative pt-20 pb-32 px-4 sm:px-6 lg:px-8 section-fade">
+        <div className="hero-orb w-72 h-72 bg-yellow-400/30 top-8 left-[-4rem]" />
+        <div className="hero-orb w-80 h-80 bg-white/10 top-0 right-[-5rem]" />
+        <div className="max-w-7xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-8 pill shadow-[0_0_40px_rgba(250,204,21,0.08)]">
+            <Sparkles className="w-4 h-4" />
+            <span className="text-sm font-medium tracking-[0.02em]">AI-Powered Content Creation</span>
           </div>
+          
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-[1.05] text-white max-w-5xl mx-auto">
+            Transform Your Content with
+            <span className="gradient-text block mt-2">AI Subtitles & Captions</span>
+          </h1>
+          
+          <p className="text-lg md:text-xl text-gray-300/90 mb-12 max-w-3xl mx-auto leading-relaxed">
+            Professional subtitle generation and intelligent caption translation 
+            designed for marketers, creators, and social media managers.
+          </p>
 
           {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-start max-w-6xl mx-auto mb-16 mt-10">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
             <Link to={createPageUrl("Subtitles")}>
               <Button className="btn-primary h-12 sm:h-14 px-6 sm:px-8 rounded-xl min-w-[220px] justify-center">
                 <Video className="w-5 h-5 mr-2" />
@@ -126,9 +116,9 @@ export default function Home() {
           </div>
 
           {/* Steps */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto pt-10 border-t border-white/8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
             {steps.map((step, index) => (
-              <div key={index} className="text-left premium-panel hover-lift rounded-[24px] p-5 border border-white/8">
+              <div key={index} className="text-left premium-panel panel-border-glow hover-lift rounded-[24px] p-5">
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
                   style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}
@@ -144,26 +134,23 @@ export default function Home() {
       </section>
 
       {/* Main Features */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 section-fade border-b border-white/8">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 section-fade">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-16">
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-white/45 mb-4">Tools</div>
-              <h2 className="text-3xl md:text-5xl font-semibold tracking-[-0.03em] text-white mb-3">
-                Built for speed and clarity.
-              </h2>
-            </div>
-            <p className="text-base md:text-lg text-gray-300 max-w-xl">
-              Two focused tools, designed as a clean professional workspace instead of a flashy landing page.
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Choose Your Creative Path
+            </h2>
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+              Two powerful tools designed to enhance your content creation workflow
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
             {features.map((feature, index) => (
-              <Card key={index} className="group relative overflow-hidden premium-panel hover-lift rounded-[32px] border border-white/8 transition-all duration-300">
+              <Card key={index} className="group relative overflow-hidden premium-panel panel-border-glow hover-lift rounded-[28px] transition-all duration-300">
                 <CardHeader className="p-8">
                   <div
-                    className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-105 transition-transform duration-300"
+                    className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300"
                     style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}
                   >
                     <feature.icon className="w-8 h-8 text-black" />
@@ -189,15 +176,11 @@ export default function Home() {
       </section>
 
       {/* Benefits Section */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 section-fade border-b border-white/8">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 section-fade">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-12">
-            <div className="text-xs uppercase tracking-[0.16em] text-white/45 mb-4">Why it works</div>
-            <h2 className="text-3xl md:text-5xl font-semibold tracking-[-0.03em] text-white">A more refined workflow.</h2>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {benefits.map((benefit, index) => (
-              <div key={index} className="text-left group premium-panel rounded-[24px] p-8 hover-lift border border-white/8">
+              <div key={index} className="text-center group premium-panel panel-border-glow rounded-[24px] p-8 hover-lift">
                 <div
                   className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300"
                   style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}
@@ -213,33 +196,28 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 section-fade">
-        <div className="max-w-6xl mx-auto">
-          <div className="rounded-[32px] p-8 md:p-12 text-white premium-panel border border-white/8">
-            <div className="grid md:grid-cols-[1fr_auto] gap-8 items-center">
-              <div>
-                <div className="text-xs uppercase tracking-[0.16em] text-white/45 mb-4">Get started</div>
-                <h2 className="text-3xl md:text-5xl font-semibold tracking-[-0.03em] mb-4">
-                  Use the tools. Ship faster.
-                </h2>
-                <p className="text-base md:text-lg text-gray-300 max-w-2xl">
-                  Start with subtitles or jump straight into caption translation with a cleaner, faster interface.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-4 md:justify-end">
-                <Link to={createPageUrl("Subtitles")}>
-                  <Button className="btn-primary h-12 sm:h-14 px-6 sm:px-8 rounded-xl min-w-[220px] justify-center">
-                    <Video className="w-5 h-5 mr-2" />
-                    Start with Subtitles
-                  </Button>
-                </Link>
-                <Link to={createPageUrl("Captions")}>
-                  <Button variant="outline" className="btn-outline-dark h-12 sm:h-14 px-6 sm:px-8 rounded-xl min-w-[220px] justify-center">
-                    <Type className="w-5 h-5 mr-2" />
-                    Try Caption Translation
-                  </Button>
-                </Link>
-              </div>
+      <section className="py-20 px-4 sm:px-6 lg:px-8 section-fade">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="rounded-[32px] p-12 text-white premium-panel panel-border-glow">
+            <h2 className="text-3xl md:text-4xl font-bold mb-6">
+              Ready to Transform Your Content?
+            </h2>
+            <p className="text-xl mb-8 text-gray-300">
+              Join thousands of creators using AI-powered subtitles and translations
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link to={createPageUrl("Subtitles")}>
+                <Button className="btn-primary h-12 sm:h-14 px-6 sm:px-8 rounded-xl min-w-[220px] justify-center">
+                  <Video className="w-5 h-5 mr-2" />
+                  Start with Subtitles
+                </Button>
+              </Link>
+              <Link to={createPageUrl("Captions")}>
+                <Button variant="outline" className="btn-outline-dark h-12 sm:h-14 px-6 sm:px-8 rounded-xl min-w-[220px] justify-center">
+                  <Type className="w-5 h-5 mr-2" />
+                  Try Caption Translation
+                </Button>
+              </Link>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/entities/User";
@@ -27,6 +27,7 @@ export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const glowRef = useRef(null); // subtle cursor glow element ref
 
   useEffect(() => {
     checkUser();
@@ -87,6 +88,75 @@ export default function Layout({ children, currentPageName }) {
     }
   ];
 
+  // Smooth, subtle cursor glow follow
+  useEffect(() => {
+    const glowEl = glowRef.current;
+    if (!glowEl) return;
+
+    const mediaReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const isCoarse = window.matchMedia("(pointer: coarse)");
+    if (mediaReduced.matches || isCoarse.matches) {
+      // Respect reduced motion and hide on touch devices
+      glowEl.style.display = "none";
+      return;
+    }
+
+    let rafId = 0;
+    let targetX = window.innerWidth / 2;
+    let targetY = window.innerHeight / 2;
+    let currentX = targetX;
+    let currentY = targetY;
+    const size = 220; // diameter of the glow
+    const ease = 0.12;
+
+    const setOpacity = (val) => {
+      glowEl.style.opacity = String(val);
+    };
+
+    const onMouseMove = (e) => {
+      targetX = e.clientX;
+      targetY = e.clientY;
+      // fade in on first movement
+      if (glowEl.style.opacity === "" || glowEl.style.opacity === "0") {
+        setOpacity(1);
+      }
+      if (!rafId) loop();
+    };
+
+    const onMouseEnter = () => setOpacity(1);
+    const onMouseLeave = () => setOpacity(0);
+
+    const onTouchStart = () => {
+      // hide on touch interactions
+      setOpacity(0);
+    };
+
+    const loop = () => {
+      currentX += (targetX - currentX) * ease;
+      currentY += (targetY - currentY) * ease;
+      // center the glow around the cursor
+      const x = currentX - size / 2;
+      const y = currentY - size / 2;
+      glowEl.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      rafId = requestAnimationFrame(loop);
+    };
+
+    document.addEventListener("mousemove", onMouseMove, { passive: true });
+    document.addEventListener("mouseenter", onMouseEnter, { passive: true });
+    document.addEventListener("mouseleave", onMouseLeave, { passive: true });
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+
+    // start hidden
+    setOpacity(0);
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseenter", onMouseEnter);
+      document.removeEventListener("mouseleave", onMouseLeave);
+      document.removeEventListener("touchstart", onTouchStart);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-black">
@@ -117,86 +187,107 @@ export default function Layout({ children, currentPageName }) {
 
         /* Surfaces */
         .glass-effect {
-          background: rgba(10,10,10,0.88);
-          border: 1px solid rgba(255,255,255,0.08);
-          box-shadow: 0 10px 30px rgba(0,0,0,0.24);
+          background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.09);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.42);
         }
 
         .gradient-text {
-          color: #ffffff;
-          background: none;
-          -webkit-text-fill-color: unset;
+          background: linear-gradient(135deg, #fff7bf 0%, var(--accent-yellow) 42%, var(--accent-yellow-strong) 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
         }
 
         .premium-panel {
-          background: #0d0d0d;
+          background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
           border: 1px solid rgba(255,255,255,0.08);
-          box-shadow: 0 12px 36px rgba(0,0,0,0.28);
+          box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+          backdrop-filter: blur(16px);
         }
 
         .panel-border-glow {
           position: relative;
           overflow: hidden;
         }
+        .panel-border-glow::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(250,204,21,0.45), rgba(255,255,255,0.08), rgba(250,204,21,0.15));
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
 
         .hero-orb {
-          display: none;
+          position: absolute;
+          border-radius: 9999px;
+          filter: blur(70px);
+          pointer-events: none;
+          opacity: 0.45;
         }
 
         /* Utility + motion */
         .hover-lift {
-          transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+          transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease, background 240ms ease;
         }
         .hover-lift:hover {
-          transform: translateY(-3px);
-          border-color: rgba(255,255,255,0.16);
+          transform: translateY(-6px);
+          box-shadow: 0 28px 80px rgba(0,0,0,0.46);
         }
 
         .btn-primary {
-          background: #ffffff;
+          background: linear-gradient(135deg, var(--accent-yellow), var(--accent-yellow-strong));
           color: #0a0a0a !important;
-          border: 1px solid #ffffff !important;
-          box-shadow: none;
-          transition: transform 160ms ease, opacity 160ms ease;
+          border: 1px solid transparent !important;
+          box-shadow: 0 8px 20px rgba(250, 204, 21, 0.25);
+          transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
         }
         .btn-primary:hover {
-          opacity: 0.92;
-          transform: translateY(-1px);
+          filter: brightness(1.02);
+          transform: translateY(-2px);
+          box-shadow: 0 12px 26px rgba(250, 204, 21, 0.3);
         }
 
         .btn-outline-dark {
-          border: 1px solid rgba(255,255,255,0.14) !important;
-          background: transparent !important;
+          border: 1px solid rgba(255,255,255,0.1) !important;
+          background: rgba(255,255,255,0.02) !important;
           color: var(--text-primary) !important;
-          transition: background 160ms ease, transform 160ms ease, border-color 160ms ease;
+          transition: background 180ms ease, transform 180ms ease, border-color 180ms ease;
         }
         .btn-outline-dark:hover {
-          background: rgba(255,255,255,0.05) !important;
-          border-color: rgba(255,255,255,0.22) !important;
-          transform: translateY(-1px);
+          background: rgba(255,255,255,0.07) !important;
+          border-color: rgba(250,204,21,0.35) !important;
+          transform: translateY(-2px);
         }
 
         .pill {
-          border: 1px solid rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.03);
-          color: #f4f4f4;
+          border: 1px solid rgba(245, 217, 10, 0.35);
+          background: rgba(245, 217, 10, 0.08);
+          color: var(--accent-yellow);
         }
 
         .nav-link {
-          border: 1px solid transparent;
-          background: transparent;
-          color: #9f9f9f;
-          transition: color 160ms ease, background 160ms ease;
+          border: 1px solid rgba(255,255,255,0.07);
+          background: rgba(255,255,255,0.02);
+          color: #d1d1d1;
+          transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
         }
         .nav-link:hover {
-          background: rgba(255,255,255,0.04);
+          background: rgba(255,255,255,0.06);
+          border-color: rgba(250,204,21,0.28);
           color: #fff;
-          transform: none;
+          transform: translateY(-2px);
         }
         .nav-link-active {
-          background: #ffffff;
+          background: linear-gradient(135deg, var(--accent-yellow), var(--accent-yellow-strong));
           color: #0a0a0a;
-          border: 1px solid #ffffff;
+          border: 1px solid transparent;
         }
 
         .section-fade {
@@ -235,9 +326,40 @@ export default function Layout({ children, currentPageName }) {
       `}</style>
 
       {/* Additional styles for the cursor glow */}
+      <style>{`
+        .cursor-glow {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 220px;
+          height: 220px;
+          border-radius: 50%;
+          pointer-events: none;
+          z-index: 20; /* below sticky nav (z-50) */
+          opacity: 0;
+          transition: opacity 220ms ease;
+          will-change: transform, opacity;
+          /* soft yellow glow using radial gradient + blur for premium subtle feel */
+          background: radial-gradient(60px circle at center,
+            rgba(250, 204, 21, 0.16),
+            rgba(250, 204, 21, 0.08) 40%,
+            rgba(250, 204, 21, 0.00) 70%);
+          filter: blur(30px);
+        }
+
+        /* Hide on touch devices */
+        @media (hover: none), (pointer: coarse) {
+          .cursor-glow { display: none; }
+        }
+
+        /* Respect reduced-motion preference */
+        @media (prefers-reduced-motion: reduce) {
+          .cursor-glow { display: none !important; }
+        }
+      `}</style>
 
       {/* Navigation Header */}
-      <nav className="glass-effect border-b border-white/10 sticky top-0 z-50">
+      <nav className="glass-effect border-b border-[var(--border-subtle)] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
@@ -382,6 +504,8 @@ export default function Layout({ children, currentPageName }) {
         </div>
       </main>
 
+      {/* Subtle yellow cursor glow overlay */}
+      <div ref={glowRef} className="cursor-glow" aria-hidden="true"></div>
 
       {/* Footer */}
       <footer className="glass-effect border-t border-[var(--border-subtle)] py-8 mt-16">
