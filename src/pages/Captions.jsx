@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,17 +104,31 @@ export default function Captions() {
         ${dialectSection}
         ${toneGuidelines}
 
-        Requirements:
-        - Maintain the original meaning and tone
+        Core Requirements:
+        - Preserve the original meaning, intent, and emotional tone
         - Adapt for ${translationStyle === 'marketing' ? 'marketing/social media' : translationStyle} context
-        - Keep it natural and engaging
-        - Preserve any hashtags or mentions
+        - Keep it natural, fluent, and audience-ready
+        - Preserve hashtags, mentions, emojis, URLs, and promo codes exactly unless they clearly need translation
+        - Do NOT translate brand names, product names, app names, company names, campaign names, or named entities unless there is a widely used established translation
+        - If a brand or product name is written in English, usually keep it in English
+        - Do not translate slogans, taglines, or product feature names literally if that makes them sound unnatural; rewrite them in a way that feels native while keeping the original intent
+        - Avoid word-for-word translation
         - Length should be appropriate for social media (4-10 lines)
         ${targetLanguage === 'arabic' ? `- Use appropriate gender forms for ${genderContext} audience` : ''}
 
+        ${sourceLanguage === 'english' && targetLanguage === 'arabic' ? `
+        English to Arabic rules:
+        - Prioritize natural Arabic phrasing over literal sentence structure
+        - Restructure sentences when needed so they sound like they were originally written in Arabic
+        - Use idiomatic Arabic and culturally natural wording
+        - Keep marketing copy persuasive, smooth, and modern
+        - Do not mirror English wording mechanically
+        - If the English phrase is awkward when translated literally, rewrite it into natural ${dialectLabelMap[dialect] || dialect} Arabic
+        ` : ''}
+
         Original caption: "${originalText}"
 
-        Provide only the translated text without any explanations or formatting.
+        Return only the final translated caption text with no explanations, no labels, and no quotation marks.
       `;
 
       const result = await InvokeLLM({
