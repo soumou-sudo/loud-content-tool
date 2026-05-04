@@ -78,12 +78,10 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-black overflow-hidden">
+    <div className="min-h-screen bg-black">
       {/* Hero Section */}
-      <section className="relative pt-20 pb-32 px-4 sm:px-6 lg:px-8 section-fade">
-        <div className="hero-orb w-72 h-72 bg-yellow-400/30 top-8 left-[-4rem]" />
-        <div className="hero-orb w-80 h-80 bg-white/10 top-0 right-[-5rem]" />
-        <div className="max-w-7xl mx-auto text-center relative z-10">
+      <section className="pt-20 pb-32 px-4 sm:px-6 lg:px-8 section-fade">
+        <div className="max-w-7xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-8 pill shadow-[0_0_40px_rgba(250,204,21,0.08)]">
             <Sparkles className="w-4 h-4" />
             <span className="text-sm font-medium tracking-[0.02em]">AI-Powered Content Creation</span>
