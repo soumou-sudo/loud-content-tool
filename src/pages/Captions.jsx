@@ -208,7 +208,9 @@ export default function Captions() {
 
   return (
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-black">
-      <div className="max-w-5xl mx-auto section-fade">
+      <div className="max-w-5xl mx-auto section-fade relative">
+        <div className="hero-orb w-72 h-72 bg-yellow-400/20 top-[-2rem] left-[-4rem]" />
+        <div className="hero-orb w-72 h-72 bg-white/10 top-10 right-[-4rem]" />
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6 pill border-[rgba(245,217,10,0.35)] bg-[rgba(245,217,10,0.08)] text-yellow-400">
@@ -237,7 +239,7 @@ export default function Captions() {
 
         <div className="space-y-8">
           {/* Translation Configuration */}
-          <Card className="glass-effect border-gray-800 shadow-xl bg-gray-900/40">
+          <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-yellow-400" />
@@ -250,7 +252,7 @@ export default function Captions() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-300">From</label>
                   <Select value={sourceLanguage} onValueChange={setSourceLanguage}>
-                    <SelectTrigger className="w-full bg-black text-white border-gray-700 focus:ring-offset-black">
+                    <SelectTrigger className="w-full bg-black/60 text-white border-white/10 rounded-xl focus:ring-offset-black">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-black border-gray-700 text-white">
@@ -264,7 +266,7 @@ export default function Captions() {
                   <label className="text-sm font-medium text-gray-300">To</label>
                   <div className="flex gap-2">
                     <Select value={targetLanguage} onValueChange={setTargetLanguage}>
-                      <SelectTrigger className="flex-1 bg-black text-white border-gray-700 focus:ring-offset-black">
+                      <SelectTrigger className="flex-1 bg-black/60 text-white border-white/10 rounded-xl focus:ring-offset-black">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-black border-gray-700 text-white">
@@ -308,7 +310,7 @@ export default function Captions() {
                   <div className="space-y-2 md:col-span-1">
                     <label className="text-sm font-medium text-gray-300">Gender Context</label>
                     <Select value={genderContext} onValueChange={setGenderContext}>
-                      <SelectTrigger className="bg-black text-white border-gray-700 focus:ring-offset-black">
+                      <SelectTrigger className="bg-black/60 text-white border-white/10 rounded-xl focus:ring-offset-black">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-black border-gray-700 text-white">
@@ -325,7 +327,7 @@ export default function Captions() {
                   <div className="space-y-2 md:col-span-1">
                     <label className="text-sm font-medium text-gray-300">Dialect</label>
                     <Select value={dialect} onValueChange={setDialect}>
-                      <SelectTrigger className="bg-black text-white border-gray-700 focus:ring-offset-black">
+                      <SelectTrigger className="bg-black/60 text-white border-white/10 rounded-xl focus:ring-offset-black">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-black border-gray-700 text-white">
@@ -364,7 +366,7 @@ export default function Captions() {
               </div>
 
               {/* Current Settings Display */}
-              <div className="flex flex-wrap gap-2 p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)' }}>
+              <div className="flex flex-wrap gap-2 p-4 rounded-2xl border border-white/10 bg-white/[0.03] shadow-inner">
                 <Badge variant="outline" className="border-gray-700 text-gray-300 bg-gray-800">
                   {sourceLanguage} → {targetLanguage}
                 </Badge>
@@ -393,7 +395,7 @@ export default function Captions() {
           {/* Translation Interface */}
           <div className="grid lg:grid-cols-2 gap-8">
             {/* Input */}
-            <Card className="glass-effect border-gray-800 shadow-xl bg-gray-900/40">
+            <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Type className="w-5 h-5 text-yellow-400" />
@@ -406,7 +408,7 @@ export default function Captions() {
                     value={originalText}
                     onChange={(e) => setOriginalText(e.target.value)}
                     placeholder="Enter your caption text here (4-10 lines recommended)..."
-                    className="min-h-[200px] resize-none bg-black text-white border-gray-700 placeholder:text-gray-500 focus-visible:ring-offset-black"
+                    className="min-h-[200px] resize-none rounded-2xl bg-black/60 text-white border-white/10 placeholder:text-gray-500 focus-visible:ring-offset-black"
                     maxLength={1000}
                   />
                   <div className="flex items-center justify-between">
@@ -447,7 +449,7 @@ export default function Captions() {
             </Card>
 
             {/* Output */}
-            <Card className="glass-effect border-gray-800 shadow-xl bg-gray-900/40">
+            <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
               <CardHeader className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-yellow-400" />
@@ -470,10 +472,10 @@ export default function Captions() {
                       <Textarea
                         value={translatedText}
                         onChange={(e) => setTranslatedText(e.target.value)}
-                        className="min-h-[220px] resize-none bg-black text-white border-gray-700 focus-visible:ring-offset-black focus-visible:ring-2 focus-visible:ring-yellow-500"
+                        className="min-h-[220px] resize-none rounded-2xl bg-black/60 text-white border-white/10 focus-visible:ring-offset-black focus-visible:ring-2 focus-visible:ring-yellow-500"
                       />
                     ) : (
-                      <div className="bg-black border border-gray-800 rounded-xl p-4 min-h-[200px]">
+                      <div className="bg-black/60 border border-white/10 rounded-2xl p-4 min-h-[200px] shadow-inner">
                         <div className="whitespace-pre-wrap text-white">
                           {translatedText}
                         </div>
@@ -511,7 +513,7 @@ export default function Captions() {
           </div>
 
           {/* Info Card */}
-          <Card className="glass-effect border border-white/10 bg-[#0b0b0b] hover-lift">
+          <Card className="premium-panel panel-border-glow rounded-[28px] border border-white/10 bg-[#0b0b0b] hover-lift">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"

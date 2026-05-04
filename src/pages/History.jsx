@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { User, CaptionHistory } from "@/entities/all";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -98,7 +97,7 @@ export default function History() {
             Sign in to save your translations and access them anytime
           </p>
           
-          <Card className="glass-effect border-0 shadow-xl max-w-md mx-auto">
+          <Card className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-xl max-w-md mx-auto">
             <CardContent className="p-8 text-center">
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
                    style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}>
@@ -124,7 +123,9 @@ export default function History() {
 
   return (
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-black">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto relative">
+        <div className="hero-orb w-72 h-72 bg-yellow-400/20 top-[-2rem] left-[-4rem]" />
+        <div className="hero-orb w-72 h-72 bg-white/10 top-6 right-[-4rem]" />
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6 pill">
@@ -144,7 +145,7 @@ export default function History() {
         )}
 
         {/* User Info */}
-        <Card className="glass-effect border-0 shadow-lg mb-8">
+        <Card className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-lg mb-8">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full flex items-center justify-center"
@@ -163,7 +164,7 @@ export default function History() {
         {history.length > 0 ? (
           <div className="grid gap-6">
             {history.map((translation) => (
-              <Card key={translation.id} className="glass-effect border-0 shadow-lg hover-lift transition-shadow duration-200">
+              <Card key={translation.id} className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-lg hover-lift transition-shadow duration-200">
                 <CardHeader className="pb-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -198,7 +199,7 @@ export default function History() {
                   {/* Original Text */}
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-300">Original ({translation.source_language})</div>
-                    <div className="p-3 bg-gray-800 rounded-lg text-gray-200 text-sm">
+                    <div className="p-4 bg-black/50 border border-white/10 rounded-2xl text-gray-200 text-sm shadow-inner">
                       {translation.original_text}
                     </div>
                   </div>
@@ -206,7 +207,7 @@ export default function History() {
                   {/* Translated Text */}
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-300">Translation ({translation.target_language})</div>
-                    <div className="p-3 bg-gray-800 rounded-lg text-yellow-400 text-sm">
+                    <div className="p-4 bg-black/50 border border-white/10 rounded-2xl text-yellow-300 text-sm shadow-inner">
                       {translation.translated_text}
                     </div>
                   </div>
@@ -227,7 +228,7 @@ export default function History() {
             ))}
           </div>
         ) : (
-          <Card className="glass-effect border-0 shadow-xl hover-lift">
+          <Card className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-xl hover-lift">
             <CardContent className="p-12 text-center">
               <FileText className="w-16 h-16 mx-auto mb-6 text-gray-400" />
               <h3 className="text-xl font-semibold text-white mb-2">No translations yet</h3>

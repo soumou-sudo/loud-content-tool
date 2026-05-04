@@ -1,4 +1,3 @@
-
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
@@ -79,21 +78,23 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black overflow-hidden">
       {/* Hero Section */}
-      <section className="pt-20 pb-32 px-4 sm:px-6 lg:px-8 section-fade">
-        <div className="max-w-7xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-8 pill">
+      <section className="relative pt-20 pb-32 px-4 sm:px-6 lg:px-8 section-fade">
+        <div className="hero-orb w-72 h-72 bg-yellow-400/30 top-8 left-[-4rem]" />
+        <div className="hero-orb w-80 h-80 bg-white/10 top-0 right-[-5rem]" />
+        <div className="max-w-7xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-8 pill shadow-[0_0_40px_rgba(250,204,21,0.08)]">
             <Sparkles className="w-4 h-4" />
-            <span className="text-sm font-medium">AI-Powered Content Creation</span>
+            <span className="text-sm font-medium tracking-[0.02em]">AI-Powered Content Creation</span>
           </div>
           
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight text-white">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-[1.05] text-white max-w-5xl mx-auto">
             Transform Your Content with
             <span className="gradient-text block mt-2">AI Subtitles & Captions</span>
           </h1>
           
-          <p className="text-xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-lg md:text-xl text-gray-300/90 mb-12 max-w-3xl mx-auto leading-relaxed">
             Professional subtitle generation and intelligent caption translation 
             designed for marketers, creators, and social media managers.
           </p>
@@ -117,7 +118,7 @@ export default function Home() {
           {/* Steps */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
             {steps.map((step, index) => (
-              <div key={index} className="text-left glass-effect rounded-2xl p-5 border border-white/10">
+              <div key={index} className="text-left premium-panel panel-border-glow hover-lift rounded-[24px] p-5">
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
                   style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}
@@ -146,7 +147,7 @@ export default function Home() {
 
           <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
             {features.map((feature, index) => (
-              <Card key={index} className="group relative overflow-hidden glass-effect hover-lift transition-all duration-300">
+              <Card key={index} className="group relative overflow-hidden premium-panel panel-border-glow hover-lift rounded-[28px] transition-all duration-300">
                 <CardHeader className="p-8">
                   <div
                     className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300"
@@ -175,11 +176,11 @@ export default function Home() {
       </section>
 
       {/* Benefits Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#0b0b0b] section-fade">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 section-fade">
         <div className="max-w-7xl mx-auto">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {benefits.map((benefit, index) => (
-              <div key={index} className="text-center group">
+              <div key={index} className="text-center group premium-panel panel-border-glow rounded-[24px] p-8 hover-lift">
                 <div
                   className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300"
                   style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}
@@ -197,7 +198,7 @@ export default function Home() {
       {/* CTA Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 section-fade">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="rounded-3xl p-12 text-white border border-white/10 bg-[#0b0b0b]">
+          <div className="rounded-[32px] p-12 text-white premium-panel panel-border-glow">
             <h2 className="text-3xl md:text-4xl font-bold mb-6">
               Ready to Transform Your Content?
             </h2>

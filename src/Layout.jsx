@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -188,24 +187,59 @@ export default function Layout({ children, currentPageName }) {
 
         /* Surfaces */
         .glass-effect {
-          background: var(--bg-panel);
-          backdrop-filter: blur(18px);
-          border: 1px solid var(--border-subtle);
-          box-shadow: var(--shadow-soft);
+          background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.09);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.42);
         }
 
         .gradient-text {
-          background: linear-gradient(135deg, var(--accent-yellow), var(--accent-yellow-strong));
+          background: linear-gradient(135deg, #fff7bf 0%, var(--accent-yellow) 42%, var(--accent-yellow-strong) 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
         }
 
+        .premium-panel {
+          background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
+          border: 1px solid rgba(255,255,255,0.08);
+          box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+          backdrop-filter: blur(16px);
+        }
+
+        .panel-border-glow {
+          position: relative;
+          overflow: hidden;
+        }
+        .panel-border-glow::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(250,204,21,0.45), rgba(255,255,255,0.08), rgba(250,204,21,0.15));
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
+
+        .hero-orb {
+          position: absolute;
+          border-radius: 9999px;
+          filter: blur(70px);
+          pointer-events: none;
+          opacity: 0.45;
+        }
+
         /* Utility + motion */
         .hover-lift {
-          transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+          transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease, background 240ms ease;
         }
-        .hover-lift:hover { transform: translateY(-4px); }
+        .hover-lift:hover {
+          transform: translateY(-6px);
+          box-shadow: 0 28px 80px rgba(0,0,0,0.46);
+        }
 
         .btn-primary {
           background: linear-gradient(135deg, var(--accent-yellow), var(--accent-yellow-strong));
@@ -221,13 +255,14 @@ export default function Layout({ children, currentPageName }) {
         }
 
         .btn-outline-dark {
-          border: 1px solid var(--border-subtle) !important;
-          background: transparent !important;
+          border: 1px solid rgba(255,255,255,0.1) !important;
+          background: rgba(255,255,255,0.02) !important;
           color: var(--text-primary) !important;
-          transition: background 180ms ease, transform 180ms ease;
+          transition: background 180ms ease, transform 180ms ease, border-color 180ms ease;
         }
         .btn-outline-dark:hover {
-          background: rgba(255,255,255,0.06) !important;
+          background: rgba(255,255,255,0.07) !important;
+          border-color: rgba(250,204,21,0.35) !important;
           transform: translateY(-2px);
         }
 
@@ -238,12 +273,14 @@ export default function Layout({ children, currentPageName }) {
         }
 
         .nav-link {
-          border: 1px solid var(--border-subtle);
+          border: 1px solid rgba(255,255,255,0.07);
+          background: rgba(255,255,255,0.02);
           color: #d1d1d1;
           transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
         }
         .nav-link:hover {
-          background: rgba(255,255,255,0.05);
+          background: rgba(255,255,255,0.06);
+          border-color: rgba(250,204,21,0.28);
           color: #fff;
           transform: translateY(-2px);
         }
