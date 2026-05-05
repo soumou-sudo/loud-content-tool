@@ -114,6 +114,7 @@ function buildSmartSegments(rawSegments) {
       start: Number(segment.start) || 0,
       end: Number(segment.end) || 0,
       text: (segment.text || '').replace(/\s+/g, ' ').trim(),
+      language: normalizeLanguage(segment.language || segment.lang || segment.detected_language || ''),
     }))
     .filter((segment) => segment.text && segment.end > segment.start);
 
@@ -129,8 +130,9 @@ function buildSmartSegments(rawSegments) {
     const shouldSplitForPause = pauseDuration >= PAUSE_SPLIT_THRESHOLD;
     const shouldSplitForSentence = /[.!?…:]$/.test(current.text) && pauseDuration >= 0.45;
     const shouldSplitForLength = currentDuration >= MAX_SEGMENT_DURATION || current.text.length >= MAX_SEGMENT_CHARS;
+    const shouldSplitForLanguage = Boolean(current.language && next.language && current.language !== next.language);
 
-    if (shouldSplitForPause || shouldSplitForSentence || shouldSplitForLength) {
+    if (shouldSplitForPause || shouldSplitForSentence || shouldSplitForLength || shouldSplitForLanguage) {
       mergedSegments.push(current);
       current = { ...next };
       continue;
@@ -140,11 +142,16 @@ function buildSmartSegments(rawSegments) {
       start: current.start,
       end: next.end,
       text: `${current.text} ${next.text}`.trim(),
+      language: current.language || next.language,
     };
   }
 
   mergedSegments.push(current);
   return mergedSegments;
+}
+
+function normalizeLanguage(language) {
+  return String(language || '').trim().toLowerCase();
 }
 
 function splitSegmentsByWordCount(segments, wordsPerSegment) {
