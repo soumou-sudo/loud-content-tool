@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
@@ -27,10 +27,20 @@ export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const glowRef = useRef(null);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
     checkUser();
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 16);
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const checkUser = async () => {
@@ -115,9 +125,18 @@ export default function Layout({ children, currentPageName }) {
 
         /* Surfaces */
         .glass-effect {
-          background: rgba(255,255,255,0.04);
+          background: rgba(10,10,10,0.62);
           border: 1px solid rgba(255,255,255,0.08);
           box-shadow: 0 10px 30px rgba(0,0,0,0.32);
+          backdrop-filter: blur(18px) saturate(140%);
+          -webkit-backdrop-filter: blur(18px) saturate(140%);
+          transition: background 220ms ease, border-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
+        }
+
+        .glass-effect-scrolled {
+          background: rgba(10,10,10,0.82);
+          border-color: rgba(255,255,255,0.12);
+          box-shadow: 0 20px 45px rgba(0,0,0,0.45);
         }
 
         .gradient-text {
@@ -144,11 +163,12 @@ export default function Layout({ children, currentPageName }) {
 
         /* Utility + motion */
         .hover-lift {
-          transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
+          transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease, border-color 220ms ease, background 220ms ease;
+          will-change: transform;
         }
         .hover-lift:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 16px 36px rgba(0,0,0,0.34);
+          transform: translateY(-4px);
+          box-shadow: 0 18px 40px rgba(0,0,0,0.38);
         }
 
         .btn-primary {
@@ -184,20 +204,22 @@ export default function Layout({ children, currentPageName }) {
 
         .nav-link {
           border: 1px solid rgba(255,255,255,0.07);
-          background: rgba(255,255,255,0.02);
-          color: #d1d1d1;
-          transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+          background: rgba(255,255,255,0.03);
+          color: #d7d7d7;
+          transition: background 220ms ease, border-color 220ms ease, color 220ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease;
         }
         .nav-link:hover {
-          background: rgba(255,255,255,0.06);
-          border-color: rgba(250,204,21,0.28);
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(250,204,21,0.24);
           color: #fff;
           transform: translateY(-2px);
+          box-shadow: 0 10px 24px rgba(0,0,0,0.22);
         }
         .nav-link-active {
-          background: linear-gradient(135deg, var(--accent-yellow), var(--accent-yellow-strong));
+          background: linear-gradient(135deg, rgba(245,217,10,0.96), rgba(250,204,21,0.88));
           color: #0a0a0a;
-          border: 1px solid transparent;
+          border: 1px solid rgba(255,255,255,0.16);
+          box-shadow: 0 10px 24px rgba(250, 204, 21, 0.18);
         }
 
         .section-fade {
@@ -216,12 +238,12 @@ export default function Layout({ children, currentPageName }) {
 
         /* Page route transition (smoother navigation) */
         .route-transition {
-          animation: routeFadeUp 320ms ease-out forwards;
+          animation: routeFadeUp 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
           opacity: 0;
-          transform: translateY(6px);
+          transform: translateY(10px) scale(0.995);
         }
         @keyframes routeFadeUp {
-          to { opacity: 1; transform: translateY(0); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         /* Smooth scrolling for the whole app */
@@ -253,9 +275,9 @@ export default function Layout({ children, currentPageName }) {
       `}</style>
 
       {/* Navigation Header */}
-      <nav className="glass-effect border-b border-[var(--border-subtle)] sticky top-0 z-50">
+      <nav className={`sticky top-0 z-50 border-b border-[var(--border-subtle)] glass-effect ${isScrolled ? 'glass-effect-scrolled' : ''}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className={`flex justify-between items-center transition-all duration-300 ${isScrolled ? 'h-14' : 'h-16'}`}>
             {/* Logo */}
             <Link to={createPageUrl("Home")} className="flex items-center gap-3 group">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200"
@@ -393,7 +415,8 @@ export default function Layout({ children, currentPageName }) {
 
       {/* Main Content */}
       <main className="flex-1 bg-black">
-        <div key={location.pathname} className="route-transition">
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-0 h-64 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.10),transparent_60%)]" />
+        <div key={location.pathname} className="route-transition relative z-10">
           {children}
         </div>
       </main>
