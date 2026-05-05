@@ -13,6 +13,7 @@ const MAX_SEGMENT_DURATION = 6;
 const MAX_SEGMENT_CHARS = 90;
 const MIN_SEGMENT_CHARS = 18;
 const MIN_SEGMENT_WORDS = 3;
+const MULTILINGUAL_PROMPT = 'Transcribe exactly what is spoken. This audio may switch between English and Arabic. Keep each spoken language as originally spoken and do not translate, normalize, or rewrite one language into the other.';
 
 Deno.serve(async (req) => {
   try {
@@ -70,12 +71,15 @@ Deno.serve(async (req) => {
     const transcription = await openai.audio.transcriptions.create({
       file: fileForOpenAI,
       model: 'whisper-1',
+      prompt: MULTILINGUAL_PROMPT,
+      temperature: 0,
       response_format: 'verbose_json',
       timestamp_granularities: ['segment'],
     });
 
     const rawSegments = transcription.segments || [];
-    const smartSegments = buildSmartSegments(rawSegments);
+    const normalizedSegments = ensureMixedLanguageSegments(rawSegments);
+    const smartSegments = buildSmartSegments(normalizedSegments);
     const segments = wordsPerSegment > 0 ? splitSegmentsByWordCount(smartSegments, wordsPerSegment) : smartSegments;
     const srtContent = segments.length > 0
       ? segments
@@ -110,6 +114,40 @@ Deno.serve(async (req) => {
     }, { status: 500 });
   }
 });
+
+function ensureMixedLanguageSegments(rawSegments) {
+  return rawSegments.flatMap((segment) => {
+    const start = Number(segment.start) || 0;
+    const end = Number(segment.end) || 0;
+    const text = String(segment.text || '').replace(/\s+/g, ' ').trim();
+
+    if (!text || end <= start) return [];
+
+    const splitParts = splitMixedLanguageText(text);
+    if (splitParts.length <= 1) return [{ ...segment, text }];
+
+    const totalChars = splitParts.reduce((sum, part) => sum + part.text.length, 0) || splitParts.length;
+    let cursor = start;
+
+    return splitParts.map((part, index) => {
+      const isLast = index === splitParts.length - 1;
+      const ratio = part.text.length / totalChars;
+      const partDuration = isLast ? Math.max(0.01, end - cursor) : Math.max(0.01, (end - start) * ratio);
+      const partStart = cursor;
+      const partEnd = isLast ? end : Math.min(end, cursor + partDuration);
+      cursor = partEnd;
+
+      return {
+        ...segment,
+        start: partStart,
+        end: partEnd,
+        text: part.text,
+        language: part.language,
+        detected_language: part.language,
+      };
+    });
+  });
+}
 
 function buildSmartSegments(rawSegments) {
   const cleanedSegments = rawSegments
@@ -161,6 +199,46 @@ function normalizeLanguage(language) {
   return String(language || '').trim().toLowerCase();
 }
 
+function splitMixedLanguageText(text) {
+  const tokens = String(text || '').match(/[^\s]+|\s+/g) || [];
+  const parts = [];
+  let currentText = '';
+  let currentLanguage = '';
+
+  for (const token of tokens) {
+    const tokenLanguage = inferLanguageFromText(token) || currentLanguage;
+
+    if (!currentText) {
+      currentText = token;
+      currentLanguage = tokenLanguage;
+      continue;
+    }
+
+    const shouldSplit = Boolean(
+      tokenLanguage &&
+      currentLanguage &&
+      tokenLanguage !== currentLanguage &&
+      /\S/.test(token)
+    );
+
+    if (shouldSplit) {
+      parts.push({ text: currentText.trim(), language: currentLanguage });
+      currentText = token;
+      currentLanguage = tokenLanguage;
+      continue;
+    }
+
+    currentText += token;
+    currentLanguage = currentLanguage || tokenLanguage;
+  }
+
+  if (currentText.trim()) {
+    parts.push({ text: currentText.trim(), language: currentLanguage });
+  }
+
+  return parts.filter((part) => part.text);
+}
+
 function inferLanguageFromText(text) {
   const value = String(text || '').trim();
   if (!value) return '';
@@ -168,8 +246,8 @@ function inferLanguageFromText(text) {
   const arabicChars = (value.match(/[\u0600-\u06FF]/g) || []).length;
   const latinChars = (value.match(/[A-Za-z]/g) || []).length;
 
-  if (arabicChars > latinChars * 1.2 && arabicChars >= 2) return 'arabic';
-  if (latinChars > arabicChars * 1.2 && latinChars >= 2) return 'english';
+  if (arabicChars >= 1 && arabicChars >= latinChars) return 'arabic';
+  if (latinChars >= 1 && latinChars > arabicChars) return 'english';
   return '';
 }
 
