@@ -281,10 +281,12 @@ Return only the translated SRT content, with timestamps untouched.
     return (+h)*3600 + (+m)*60 + (+s) + (+ms)/1000;
   };
   const secondsToSrtTime = (sec) => {
-    const hours = Math.floor(sec / 3600);
-    const minutes = Math.floor((sec % 3600) / 60);
-    const seconds = Math.floor(sec % 60);
-    const ms = Math.round((sec - Math.floor(sec)) * 1000);
+    const safe = Math.max(0, Number(sec) || 0);
+    const totalMs = Math.round(safe * 1000);
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const seconds = Math.floor((totalMs % 60000) / 1000);
+    const ms = totalMs % 1000;
     const pad = (n, l=2) => String(n).padStart(l, '0');
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${pad(ms,3)}`;
   };
@@ -312,33 +314,32 @@ Return only the translated SRT content, with timestamps untouched.
     const max = Math.max(1, Number(wordsPerSentence) || 1);
     const cues = parseSRT(editedSubtitles || subtitles || '');
     if (!cues.length) return;
+
+    const timedWords = cues.flatMap((cue) => {
+      const words = cue.text.split(/\s+/).filter(Boolean);
+      if (!words.length) return [];
+      const duration = Math.max(cue.end - cue.start, 0.01);
+      const wordDuration = duration / words.length;
+
+      return words.map((word, index) => ({
+        text: word,
+        start: cue.start + wordDuration * index,
+        end: cue.start + wordDuration * (index + 1),
+      }));
+    });
+
+    if (!timedWords.length) return;
+
     const newCues = [];
-    let groupStart = null;
-    let groupEnd = null;
-    let words = [];
-    for (const cue of cues) {
-      const w = cue.text.split(/\s+/).filter(Boolean);
-      if (groupStart === null) groupStart = cue.start;
-      groupEnd = cue.end;
-      for (const word of w) {
-        words.push(word);
-        if (words.length >= max) {
-          newCues.push({ start: groupStart, end: groupEnd, text: words.join(' ') });
-          words = [];
-          groupStart = null;
-          groupEnd = null;
-        }
-      }
-      // if group reset happened, next loop will set start
+    for (let index = 0; index < timedWords.length; index += max) {
+      const chunk = timedWords.slice(index, index + max);
+      newCues.push({
+        start: chunk[0].start,
+        end: chunk[chunk.length - 1].end,
+        text: chunk.map((word) => word.text).join(' '),
+      });
     }
-    if (words.length) {
-      if (groupStart === null) {
-        const last = cues[cues.length - 1];
-        newCues.push({ start: last.start, end: last.end, text: words.join(' ') });
-      } else {
-        newCues.push({ start: groupStart, end: groupEnd ?? groupStart + 1, text: words.join(' ') });
-      }
-    }
+
     setEditedSubtitles(formatSRT(newCues));
     setIsEditing(false);
   };
