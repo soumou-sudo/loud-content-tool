@@ -160,7 +160,7 @@ export default function Subtitles() {
 
       // Proceed to transcription
       await runAgentStep(3);
-      const response = await transcribeVideo({ file_url, filename: file.name, mime_type: file.type });
+      const response = await transcribeVideo({ file_url, filename: file.name, mime_type: file.type, words_per_segment: Number(wordsPerSentence) || 0 });
 
       if (response.data.error) {
         throw new Error(response.data.error);
@@ -501,6 +501,20 @@ Return only the translated SRT content, with timestamps untouched.
                       <Badge className="bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700">Ready</Badge>
                     )}
                   </div>
+
+                  {!processing && !subtitles && (
+                    <div className="p-4 bg-gray-900 rounded-xl border border-gray-700">
+                      <Label htmlFor="preprocess-wps" className="text-gray-300 text-sm">Words per segment before transcription</Label>
+                      <Input
+                        id="preprocess-wps"
+                        type="number"
+                        min={1}
+                        value={wordsPerSentence}
+                        onChange={(e) => setWordsPerSentence(e.target.value)}
+                        className="mt-2 bg-black text-white border-gray-700"
+                      />
+                    </div>
+                  )}
 
                   {processing && <AgentProgress />}
 

@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     let mediaFile = null;
     let filename = 'media';
     let mimeType = 'audio/mpeg';
+    let wordsPerSegment = 0;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -38,6 +39,7 @@ Deno.serve(async (req) => {
       const fileUrl = body?.file_url;
       filename = body?.filename || filename;
       mimeType = body?.mime_type || mimeType;
+      wordsPerSegment = Math.max(1, Number(body?.words_per_segment) || 0);
 
       if (fileUrl) {
         const fetched = await fetch(fileUrl);
@@ -70,7 +72,8 @@ Deno.serve(async (req) => {
     });
 
     const rawSegments = transcription.segments || [];
-    const segments = buildSmartSegments(rawSegments);
+    const smartSegments = buildSmartSegments(rawSegments);
+    const segments = wordsPerSegment > 0 ? splitSegmentsByWordCount(smartSegments, wordsPerSegment) : smartSegments;
     const srtContent = segments.length > 0
       ? segments
           .map((segment, index) => `${index + 1}\n${formatTime(segment.start)} --> ${formatTime(segment.end)}\n${segment.text.trim()}\n`)
@@ -142,6 +145,36 @@ function buildSmartSegments(rawSegments) {
 
   mergedSegments.push(current);
   return mergedSegments;
+}
+
+function splitSegmentsByWordCount(segments, wordsPerSegment) {
+  const timedWords = segments.flatMap((segment) => {
+    const words = segment.text.split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+
+    const duration = Math.max(segment.end - segment.start, 0.01);
+    const wordDuration = duration / words.length;
+
+    return words.map((word, index) => ({
+      text: word,
+      start: segment.start + wordDuration * index,
+      end: segment.start + wordDuration * (index + 1),
+    }));
+  });
+
+  const chunks = [];
+  for (let index = 0; index < timedWords.length; index += wordsPerSegment) {
+    const chunk = timedWords.slice(index, index + wordsPerSegment);
+    if (!chunk.length) continue;
+
+    chunks.push({
+      start: chunk[0].start,
+      end: chunk[chunk.length - 1].end,
+      text: chunk.map((word) => word.text).join(' '),
+    });
+  }
+
+  return chunks;
 }
 
 function formatTime(seconds) {
