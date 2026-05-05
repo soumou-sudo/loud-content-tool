@@ -27,10 +27,18 @@ export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const glowRef = useRef(null);
 
   useEffect(() => {
     checkUser();
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const checkUser = async () => {
@@ -115,9 +123,11 @@ export default function Layout({ children, currentPageName }) {
 
         /* Surfaces */
         .glass-effect {
-          background: rgba(255,255,255,0.04);
+          background: rgba(17, 17, 17, 0.72);
           border: 1px solid rgba(255,255,255,0.08);
           box-shadow: 0 10px 30px rgba(0,0,0,0.32);
+          backdrop-filter: blur(22px);
+          -webkit-backdrop-filter: blur(22px);
         }
 
         .gradient-text {
@@ -128,9 +138,11 @@ export default function Layout({ children, currentPageName }) {
         }
 
         .premium-panel {
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
-          box-shadow: 0 14px 36px rgba(0,0,0,0.34);
+          background: linear-gradient(180deg, rgba(38,38,38,0.9) 0%, rgba(21,21,21,0.92) 100%);
+          border: 1px solid rgba(255,255,255,0.16);
+          box-shadow: 0 18px 50px rgba(0,0,0,0.38);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
         }
 
         .panel-border-glow {
@@ -152,34 +164,37 @@ export default function Layout({ children, currentPageName }) {
         }
 
         .btn-primary {
-          background: linear-gradient(135deg, var(--accent-yellow), var(--accent-yellow-strong));
-          color: #0a0a0a !important;
-          border: 1px solid transparent !important;
-          box-shadow: 0 8px 20px rgba(250, 204, 21, 0.25);
+          background: linear-gradient(180deg, #6f6a62 0%, #2a251f 100%);
+          color: #ffffff !important;
+          border: 1px solid rgba(255,255,255,0.28) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 12px 32px rgba(221, 184, 120, 0.26);
           transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
         }
         .btn-primary:hover {
-          filter: brightness(1.02);
+          filter: brightness(1.05);
           transform: translateY(-2px);
-          box-shadow: 0 12px 26px rgba(250, 204, 21, 0.3);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), 0 16px 34px rgba(221, 184, 120, 0.34);
         }
 
         .btn-outline-dark {
-          border: 1px solid rgba(255,255,255,0.1) !important;
-          background: rgba(255,255,255,0.02) !important;
-          color: var(--text-primary) !important;
-          transition: background 180ms ease, transform 180ms ease, border-color 180ms ease;
+          border: 1px solid rgba(226, 195, 138, 0.9) !important;
+          background: rgba(16,16,16,0.42) !important;
+          color: #e8c992 !important;
+          transition: background 180ms ease, transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
         }
         .btn-outline-dark:hover {
-          background: rgba(255,255,255,0.07) !important;
-          border-color: rgba(250,204,21,0.35) !important;
+          background: rgba(226,195,138,0.08) !important;
+          border-color: rgba(226,195,138,1) !important;
           transform: translateY(-2px);
+          box-shadow: 0 12px 28px rgba(226,195,138,0.16);
         }
 
         .pill {
-          border: 1px solid rgba(245, 217, 10, 0.35);
-          background: rgba(245, 217, 10, 0.08);
-          color: var(--accent-yellow);
+          border: 1px solid rgba(226, 195, 138, 0.95);
+          background: #d7b47b;
+          color: #17130d;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
         }
 
         .nav-link {
@@ -253,8 +268,8 @@ export default function Layout({ children, currentPageName }) {
       `}</style>
 
       {/* Navigation Header */}
-      <nav className="glass-effect border-b border-[var(--border-subtle)] sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav className="sticky top-0 z-50 px-4 sm:px-6 lg:px-8 pt-4">
+        <div className={`max-w-7xl mx-auto transition-all duration-300 ${isScrolled ? 'glass-effect rounded-2xl border border-white/10 px-4 sm:px-6 shadow-[0_20px_60px_rgba(0,0,0,0.42)]' : 'px-0'}`}>
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <Link to={createPageUrl("Home")} className="flex items-center gap-3 group">
@@ -263,8 +278,8 @@ export default function Layout({ children, currentPageName }) {
                 <Sparkles className="w-5 h-5 text-black" />
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-xl font-bold gradient-text">Loud Content Tool</h1>
-                <p className="text-xs text-[var(--text-secondary)] -mt-1">AI-Powered Video & Caption Processing</p>
+                <h1 className="text-lg font-semibold text-white tracking-[-0.02em]">Loud Content Tool</h1>
+                <p className="text-xs text-[#b5afa7] -mt-1">High-end content tools</p>
               </div>
             </Link>
 
@@ -276,10 +291,9 @@ export default function Layout({ children, currentPageName }) {
                   <Link
                     key={item.title}
                     to={item.url}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl hover-lift ${isActive ? 'nav-link-active' : 'nav-link'}`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border-b transition-all duration-200 ${isActive ? 'text-[#f0d198] border-[#f0d198]' : 'text-[#c8c2ba] border-transparent hover:text-white hover:border-white/30'}`}
                   >
-                    <item.icon className="w-4 h-4" />
-                    <span className="font-medium">{item.title}</span>
+                    <span className="font-medium text-[15px]">{item.title}</span>
                   </Link>
                 );
               })}
@@ -310,7 +324,8 @@ export default function Layout({ children, currentPageName }) {
                   ) : (
                     <Button
                       onClick={handleLogin}
-                      className="font-medium btn-primary"
+                      variant="ghost"
+                      className="font-medium text-[#f0d198] hover:bg-transparent hover:text-white"
                     >
                       <LogIn className="w-4 h-4 mr-2" />
                       Sign In
@@ -400,7 +415,7 @@ export default function Layout({ children, currentPageName }) {
 
 
       {/* Footer */}
-      <footer className="glass-effect border-t border-[var(--border-subtle)] py-8 mt-16">
+      <footer className="py-8 mt-16 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-3">
@@ -410,10 +425,10 @@ export default function Layout({ children, currentPageName }) {
               </div>
               <div>
                 <div className="font-semibold text-white">Loud Content Tool</div>
-                <div className="text-xs text-[var(--text-secondary)]">AI-Powered Content Creation</div>
+                <div className="text-xs text-[#b5afa7]">Professional subtitle generation and intelligent tools.</div>
               </div>
             </div>
-            <div className="text-sm text-[var(--text-secondary)]">
+            <div className="text-sm text-[#b5afa7]">
               © 2024 Loud Content Tool. Crafted for creators.
             </div>
           </div>
