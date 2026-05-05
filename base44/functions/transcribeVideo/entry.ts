@@ -8,8 +8,11 @@ const openai = new OpenAI({
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 const PAUSE_SPLIT_THRESHOLD = 1.2;
+const STRONG_PAUSE_SPLIT_THRESHOLD = 0.6;
 const MAX_SEGMENT_DURATION = 6;
 const MAX_SEGMENT_CHARS = 90;
+const MIN_SEGMENT_CHARS = 18;
+const MIN_SEGMENT_WORDS = 3;
 
 Deno.serve(async (req) => {
   try {
@@ -110,12 +113,19 @@ Deno.serve(async (req) => {
 
 function buildSmartSegments(rawSegments) {
   const cleanedSegments = rawSegments
-    .map((segment) => ({
-      start: Number(segment.start) || 0,
-      end: Number(segment.end) || 0,
-      text: (segment.text || '').replace(/\s+/g, ' ').trim(),
-      language: normalizeLanguage(segment.language || segment.lang || segment.detected_language || ''),
-    }))
+    .map((segment) => {
+      const text = (segment.text || '').replace(/\s+/g, ' ').trim();
+      const detectedLanguage = normalizeLanguage(segment.language || segment.lang || segment.detected_language || '');
+      const inferredLanguage = inferLanguageFromText(text);
+
+      return {
+        start: Number(segment.start) || 0,
+        end: Number(segment.end) || 0,
+        text,
+        language: detectedLanguage || inferredLanguage,
+        inferredLanguage,
+      };
+    })
     .filter((segment) => segment.text && segment.end > segment.start);
 
   if (!cleanedSegments.length) return [];
@@ -127,61 +137,121 @@ function buildSmartSegments(rawSegments) {
     const next = cleanedSegments[index];
     const pauseDuration = next.start - current.end;
     const currentDuration = current.end - current.start;
+    const currentWordCount = countWords(current.text);
+    const shouldSplitForLanguage = hasLanguageSwitch(current, next);
     const shouldSplitForPause = pauseDuration >= PAUSE_SPLIT_THRESHOLD;
-    const shouldSplitForSentence = /[.!?…:]$/.test(current.text) && pauseDuration >= 0.45;
+    const shouldSplitForSentence = endsWithStrongBoundary(current.text) && pauseDuration >= 0.35;
+    const shouldSplitForStrongPause = pauseDuration >= STRONG_PAUSE_SPLIT_THRESHOLD && currentWordCount >= MIN_SEGMENT_WORDS;
     const shouldSplitForLength = currentDuration >= MAX_SEGMENT_DURATION || current.text.length >= MAX_SEGMENT_CHARS;
-    const shouldSplitForLanguage = Boolean(current.language && next.language && current.language !== next.language);
 
-    if (shouldSplitForPause || shouldSplitForSentence || shouldSplitForLength || shouldSplitForLanguage) {
-      mergedSegments.push(current);
+    if (shouldSplitForLanguage || shouldSplitForPause || shouldSplitForSentence || shouldSplitForStrongPause || shouldSplitForLength) {
+      mergedSegments.push(finalizeSegment(current));
       current = { ...next };
       continue;
     }
 
-    current = {
-      start: current.start,
-      end: next.end,
-      text: `${current.text} ${next.text}`.trim(),
-      language: current.language || next.language,
-    };
+    current = mergeSegments(current, next);
   }
 
-  mergedSegments.push(current);
-  return mergedSegments;
+  mergedSegments.push(finalizeSegment(current));
+  return rebalanceTinySegments(mergedSegments);
 }
 
 function normalizeLanguage(language) {
   return String(language || '').trim().toLowerCase();
 }
 
+function inferLanguageFromText(text) {
+  const value = String(text || '').trim();
+  if (!value) return '';
+
+  const arabicChars = (value.match(/[\u0600-\u06FF]/g) || []).length;
+  const latinChars = (value.match(/[A-Za-z]/g) || []).length;
+
+  if (arabicChars > latinChars * 1.2 && arabicChars >= 2) return 'arabic';
+  if (latinChars > arabicChars * 1.2 && latinChars >= 2) return 'english';
+  return '';
+}
+
+function hasLanguageSwitch(current, next) {
+  const currentLanguage = normalizeLanguage(current.language || current.inferredLanguage);
+  const nextLanguage = normalizeLanguage(next.language || next.inferredLanguage);
+  return Boolean(currentLanguage && nextLanguage && currentLanguage !== nextLanguage);
+}
+
+function endsWithStrongBoundary(text) {
+  return /[.!?؟…:;]$/.test(String(text || '').trim());
+}
+
+function countWords(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function mergeSegments(current, next) {
+  return {
+    start: current.start,
+    end: next.end,
+    text: `${current.text} ${next.text}`.trim(),
+    language: current.language || next.language,
+    inferredLanguage: current.inferredLanguage || next.inferredLanguage,
+  };
+}
+
+function finalizeSegment(segment) {
+  return {
+    start: segment.start,
+    end: segment.end,
+    text: String(segment.text || '').replace(/\s+/g, ' ').trim(),
+    language: segment.language || segment.inferredLanguage || '',
+  };
+}
+
+function rebalanceTinySegments(segments) {
+  if (segments.length <= 1) return segments;
+
+  const balanced = [];
+
+  for (const segment of segments) {
+    const previous = balanced[balanced.length - 1];
+    const isTiny = segment.text.length < MIN_SEGMENT_CHARS || countWords(segment.text) < 2;
+    const sameLanguageAsPrevious = previous && !hasLanguageSwitch(previous, segment);
+    const canMergeBack = previous && sameLanguageAsPrevious && !endsWithStrongBoundary(previous.text);
+
+    if (isTiny && canMergeBack) {
+      balanced[balanced.length - 1] = mergeSegments(previous, segment);
+      continue;
+    }
+
+    balanced.push(segment);
+  }
+
+  return balanced;
+}
+
 function splitSegmentsByWordCount(segments, wordsPerSegment) {
-  const timedWords = segments.flatMap((segment) => {
+  const chunkedSegments = segments.flatMap((segment) => {
     const words = segment.text.split(/\s+/).filter(Boolean);
     if (!words.length) return [];
+    if (words.length <= wordsPerSegment) return [segment];
 
     const duration = Math.max(segment.end - segment.start, 0.01);
     const wordDuration = duration / words.length;
+    const chunks = [];
 
-    return words.map((word, index) => ({
-      text: word,
-      start: segment.start + wordDuration * index,
-      end: segment.start + wordDuration * (index + 1),
-    }));
+    for (let index = 0; index < words.length; index += wordsPerSegment) {
+      const wordChunk = words.slice(index, index + wordsPerSegment);
+      chunks.push({
+        start: segment.start + wordDuration * index,
+        end: segment.start + wordDuration * (index + wordChunk.length),
+        text: wordChunk.join(' '),
+        language: segment.language || inferLanguageFromText(wordChunk.join(' ')),
+      });
+    }
+
+    return chunks;
   });
 
-  const chunks = [];
-  for (let index = 0; index < timedWords.length; index += wordsPerSegment) {
-    const chunk = timedWords.slice(index, index + wordsPerSegment);
-    if (!chunk.length) continue;
-
-    chunks.push({
-      start: chunk[0].start,
-      end: chunk[chunk.length - 1].end,
-      text: chunk.map((word) => word.text).join(' '),
-    });
-  }
-
-  return chunks;
+  return rebalanceTinySegments(chunkedSegments.map(finalizeSegment));
 }
 
 function formatTime(seconds) {
