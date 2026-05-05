@@ -7,6 +7,9 @@ const openai = new OpenAI({
 });
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+const PAUSE_SPLIT_THRESHOLD = 1.2;
+const MAX_SEGMENT_DURATION = 6;
+const MAX_SEGMENT_CHARS = 90;
 
 Deno.serve(async (req) => {
   try {
@@ -66,7 +69,8 @@ Deno.serve(async (req) => {
       timestamp_granularities: ['segment'],
     });
 
-    const segments = transcription.segments || [];
+    const rawSegments = transcription.segments || [];
+    const segments = buildSmartSegments(rawSegments);
     const srtContent = segments.length > 0
       ? segments
           .map((segment, index) => `${index + 1}\n${formatTime(segment.start)} --> ${formatTime(segment.end)}\n${segment.text.trim()}\n`)
@@ -100,6 +104,45 @@ Deno.serve(async (req) => {
     }, { status: 500 });
   }
 });
+
+function buildSmartSegments(rawSegments) {
+  const cleanedSegments = rawSegments
+    .map((segment) => ({
+      start: Number(segment.start) || 0,
+      end: Number(segment.end) || 0,
+      text: (segment.text || '').replace(/\s+/g, ' ').trim(),
+    }))
+    .filter((segment) => segment.text && segment.end > segment.start);
+
+  if (!cleanedSegments.length) return [];
+
+  const mergedSegments = [];
+  let current = { ...cleanedSegments[0] };
+
+  for (let index = 1; index < cleanedSegments.length; index += 1) {
+    const next = cleanedSegments[index];
+    const pauseDuration = next.start - current.end;
+    const currentDuration = current.end - current.start;
+    const shouldSplitForPause = pauseDuration >= PAUSE_SPLIT_THRESHOLD;
+    const shouldSplitForSentence = /[.!?…:]$/.test(current.text) && pauseDuration >= 0.45;
+    const shouldSplitForLength = currentDuration >= MAX_SEGMENT_DURATION || current.text.length >= MAX_SEGMENT_CHARS;
+
+    if (shouldSplitForPause || shouldSplitForSentence || shouldSplitForLength) {
+      mergedSegments.push(current);
+      current = { ...next };
+      continue;
+    }
+
+    current = {
+      start: current.start,
+      end: next.end,
+      text: `${current.text} ${next.text}`.trim(),
+    };
+  }
+
+  mergedSegments.push(current);
+  return mergedSegments;
+}
 
 function formatTime(seconds) {
   const safeSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
