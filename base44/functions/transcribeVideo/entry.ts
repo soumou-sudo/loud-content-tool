@@ -1,116 +1,112 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import OpenAI from 'npm:openai@4.57.0';
 import { toFile } from 'npm:openai@4.57.0/uploads';
 
 const openai = new OpenAI({
-    apiKey: Deno.env.get("OPENAI_API_KEY"),
+  apiKey: Deno.env.get('OPENAI_API_KEY'),
 });
+
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 
 Deno.serve(async (req) => {
-    try {
-        const base44 = createClientFromRequest(req);
-        const user = await base44.auth.me();
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
 
-        if (!user) {
-            return Response.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const contentType = req.headers.get('content-type') || '';
-        let mediaFile = null;
-        let filename = 'media';
-        let mimeType = 'audio/mpeg';
-
-        if (contentType.includes('multipart/form-data')) {
-            const formData = await req.formData();
-            const f = formData.get('video') || formData.get('audio') || formData.get('file');
-            if (f && typeof f !== 'string') {
-                mediaFile = f;
-                filename = f.name || filename;
-                mimeType = f.type || mimeType;
-            }
-        } else {
-            const body = await req.json().catch(() => null);
-            const fileUrl = body?.file_url;
-            filename = body?.filename || filename;
-            mimeType = body?.mime_type || mimeType;
-            if (fileUrl) {
-                const fetched = await fetch(fileUrl);
-                if (!fetched.ok) {
-                    return Response.json({ error: 'Failed to fetch file from URL' }, { status: 400 });
-                }
-                const blob = await fetched.blob();
-                mediaFile = new File([blob], filename, { type: mimeType || blob.type || 'application/octet-stream' });
-            }
-        }
-
-        if (!mediaFile) {
-            return Response.json({ error: 'No media file provided' }, { status: 400 });
-        }
-
-        // Ensure uploaded blob is converted to a proper File for OpenAI SDK
-        const safeName = (mediaFile && mediaFile.name) ? mediaFile.name : filename;
-        const fileForOpenAI = await toFile(mediaFile, safeName);
-
-        // Transcribe using Whisper with segment timestamps
-        const transcription = await openai.audio.transcriptions.create({
-            file: fileForOpenAI,
-            model: "whisper-1",
-            response_format: "verbose_json",
-            timestamp_granularities: ["segment"]
-        });
-
-        // Convert OpenAI response to SRT format
-        let srtContent = "";
-        if (transcription.segments && transcription.segments.length > 0) {
-            transcription.segments.forEach((segment, index) => {
-                const startTime = formatTime(segment.start);
-                const endTime = formatTime(segment.end);
-                
-                srtContent += `${index + 1}\n`;
-                srtContent += `${startTime} --> ${endTime}\n`;
-                srtContent += `${segment.text.trim()}\n\n`;
-            });
-        } else {
-            // Fallback if no segments
-            const words = transcription.text || "No speech detected";
-            srtContent = `1\n00:00:01,000 --> 00:00:04,000\n${words}\n\n`;
-        }
-
-        return Response.json({ 
-            success: true,
-            subtitles: srtContent.trim(),
-            duration: transcription.duration || 0,
-            language: transcription.language || 'unknown'
-        });
-
-    } catch (error) {
-        console.error("Transcription error:", error);
-        
-        // Handle specific OpenAI errors
-        if (error.code === 'file_not_supported') {
-            return Response.json({ 
-                error: 'File format not supported. Please try common video/audio formats (MP4, MOV, MKV, MP3, WAV, M4A, OGG).' 
-            }, { status: 400 });
-        }
-        
-        if (error.code === 'file_too_large') {
-            return Response.json({ 
-                error: 'File is too large. Please try a smaller file under 25MB.' 
-            }, { status: 400 });
-        }
-
-        const status = (error && (error.status || error.response?.status)) || 500;
-        const details = error?.response?.data || { message: error.message };
-        return Response.json({ error: 'Transcription failed', details }, { status: status >= 400 && status < 600 ? status : 500 });
+    if (!user) {
+      return Response.json({ error: 'Please sign in before starting transcription.' }, { status: 401 });
     }
+
+    const contentType = req.headers.get('content-type') || '';
+    let mediaFile = null;
+    let filename = 'media';
+    let mimeType = 'audio/mpeg';
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const file = formData.get('video') || formData.get('audio') || formData.get('file');
+      if (file && typeof file !== 'string') {
+        mediaFile = file;
+        filename = file.name || filename;
+        mimeType = file.type || mimeType;
+      }
+    } else {
+      const body = await req.json();
+      const fileUrl = body?.file_url;
+      filename = body?.filename || filename;
+      mimeType = body?.mime_type || mimeType;
+
+      if (fileUrl) {
+        const fetched = await fetch(fileUrl);
+        if (!fetched.ok) {
+          return Response.json({ error: 'Could not read the uploaded file.' }, { status: 400 });
+        }
+
+        const blob = await fetched.blob();
+        const detectedType = mimeType || blob.type || 'application/octet-stream';
+        mediaFile = new File([blob], filename, { type: detectedType });
+      }
+    }
+
+    if (!mediaFile) {
+      return Response.json({ error: 'No media file was provided.' }, { status: 400 });
+    }
+
+    if (mediaFile.size > MAX_FILE_SIZE_BYTES) {
+      return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
+    }
+
+    const safeName = mediaFile.name || filename;
+    const fileForOpenAI = await toFile(mediaFile, safeName);
+
+    const transcription = await openai.audio.transcriptions.create({
+      file: fileForOpenAI,
+      model: 'whisper-1',
+      response_format: 'verbose_json',
+      timestamp_granularities: ['segment'],
+    });
+
+    const segments = transcription.segments || [];
+    const srtContent = segments.length > 0
+      ? segments
+          .map((segment, index) => `${index + 1}\n${formatTime(segment.start)} --> ${formatTime(segment.end)}\n${segment.text.trim()}\n`)
+          .join('\n')
+          .trim()
+      : `1\n00:00:00,000 --> 00:00:04,000\n${(transcription.text || 'No speech detected').trim()}\n`;
+
+    return Response.json({
+      success: true,
+      subtitles: srtContent,
+      duration: transcription.duration || 0,
+      language: transcription.language || 'unknown',
+    });
+  } catch (error) {
+    console.error('Transcription error:', error);
+
+    if (error?.status === 401) {
+      return Response.json({ error: 'Please sign in before starting transcription.' }, { status: 401 });
+    }
+
+    if (error?.code === 'file_not_supported') {
+      return Response.json({ error: 'File format not supported. Please use MP4, MOV, MKV, MP3, WAV, M4A, or OGG.' }, { status: 400 });
+    }
+
+    if (error?.code === 'file_too_large') {
+      return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
+    }
+
+    return Response.json({
+      error: error?.message || 'Transcription failed. Please try again.',
+    }, { status: 500 });
+  }
 });
 
-// Helper function to format time in SRT format
 function formatTime(seconds) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    const milliseconds = Math.floor((seconds % 1) * 1000);
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${milliseconds.toString().padStart(3, '0')}`;
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const secs = Math.floor(safeSeconds % 60);
+  const milliseconds = Math.floor((safeSeconds % 1) * 1000);
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(milliseconds).padStart(3, '0')}`;
 }

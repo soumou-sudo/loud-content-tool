@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { InvokeLLM, UploadFile } from "@/integrations/Core";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { base44 } from "@/api/base44Client";
 
 const MAX_FILE_SIZE_MB = 25; // OpenAI Whisper limit
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -51,6 +52,7 @@ export default function Subtitles() {
   const fileInputRef = useRef(null);
 
   const [translateTarget, setTranslateTarget] = useState("arabic");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [dialect, setDialect] = useState("msa");
   const [isTranslatingSub, setIsTranslatingSub] = useState(false);
   const [wordsPerSentence, setWordsPerSentence] = useState(8);
@@ -75,6 +77,10 @@ export default function Subtitles() {
   const progressPercent = processing && agentStep >= 0
     ? Math.min(100, Math.round(((agentStep + 1) / AGENT_STEPS.length) * 100))
     : 0;
+
+  useEffect(() => {
+    base44.auth.isAuthenticated().then(setIsAuthenticated);
+  }, []);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -127,6 +133,10 @@ export default function Subtitles() {
 
   const processVideo = async () => {
     if (!file) return;
+    if (!isAuthenticated) {
+      setError("Please sign in before starting transcription.");
+      return;
+    }
 
     setProcessing(true);
     setAgentStep(0);
@@ -174,6 +184,9 @@ export default function Subtitles() {
       console.error("Transcription error:", error);
       const apiMsg = error?.response?.data?.error || error?.response?.data?.details?.message;
       setError(apiMsg || error.message || "Failed to transcribe file. Please check your file and try again.");
+      if ((error?.response?.status || error?.status) === 401) {
+        setIsAuthenticated(false);
+      }
       setAgentStep(-1);
     } finally {
       setProcessing(false);
@@ -505,11 +518,19 @@ Return only the translated SRT content, with timestamps untouched.
                   )}
 
                   {!processing && !subtitles && (
-                    <Button onClick={processVideo} 
-                            className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95">
-                      <Mic className="w-4 h-4 mr-2" />
-                      Transcribe with OpenAI Whisper
-                    </Button>
+                    isAuthenticated ? (
+                      <Button onClick={processVideo} 
+                              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95">
+                        <Mic className="w-4 h-4 mr-2" />
+                        Transcribe with OpenAI Whisper
+                      </Button>
+                    ) : (
+                      <Button onClick={() => base44.auth.redirectToLogin(window.location.href)}
+                              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95">
+                        <Mic className="w-4 h-4 mr-2" />
+                        Sign In to Transcribe
+                      </Button>
+                    )
                   )}
 
                   {!processing && (

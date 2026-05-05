@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { User } from "@/entities/User";
+import { base44 } from "@/api/base44Client";
 import {
   Video,
   Type,
@@ -35,7 +35,13 @@ export default function Layout({ children, currentPageName }) {
 
   const checkUser = async () => {
     try {
-      const userData = await User.me();
+      const isAuthenticated = await base44.auth.isAuthenticated();
+      if (!isAuthenticated) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+      const userData = await base44.auth.me();
       setUser(userData);
     } catch (error) {
       setUser(null);
@@ -44,21 +50,12 @@ export default function Layout({ children, currentPageName }) {
   };
 
   const handleLogin = async () => {
-    try {
-      await User.loginWithRedirect(window.location.href);
-    } catch (error) {
-      console.error("Login failed:", error);
-    }
+    await base44.auth.redirectToLogin(window.location.href);
   };
 
   const handleLogout = async () => {
-    try {
-      await User.logout();
-      setUser(null);
-      window.location.href = createPageUrl("Home");
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
+    await base44.auth.logout(window.location.origin + createPageUrl("Home"));
+    setUser(null);
   };
 
   const navigationItems = [
