@@ -1,0 +1,69 @@
+{
+  "name": "CaptionHistory",
+  "type": "object",
+  "properties": {
+    "original_text": {
+      "type": "string",
+      "description": "Original caption text"
+    },
+    "translated_text": {
+      "type": "string",
+      "description": "Translated caption text"
+    },
+    "source_language": {
+      "type": "string",
+      "enum": [
+        "english",
+        "arabic"
+      ],
+      "description": "Source language"
+    },
+    "target_language": {
+      "type": "string",
+      "enum": [
+        "english",
+        "arabic"
+      ],
+      "description": "Target language"
+    },
+    "translation_style": {
+      "type": "string",
+      "enum": [
+        "formal",
+        "informal",
+        "casual",
+        "literal",
+        "marketing"
+      ],
+      "description": "Translation style used"
+    },
+    "gender_context": {
+      "type": "string",
+      "enum": [
+        "male",
+        "female",
+        "both"
+      ],
+      "description": "Gender context for Arabic translations"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "User who created this translation"
+    }
+  },
+  "required": [
+    "original_text",
+    "translated_text",
+    "source_language",
+    "target_language",
+    "translation_style"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

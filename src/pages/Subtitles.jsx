@@ -55,6 +55,7 @@ export default function Subtitles() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [dialect, setDialect] = useState("msa");
   const [isTranslatingSub, setIsTranslatingSub] = useState(false);
+  const [segmentationMode, setSegmentationMode] = useState("auto");
   const [wordsPerSentence, setWordsPerSentence] = useState(8);
   const [sectionsCount, setSectionsCount] = useState(10);
 
@@ -160,7 +161,12 @@ export default function Subtitles() {
 
       // Proceed to transcription
       await runAgentStep(3);
-      const response = await transcribeVideo({ file_url, filename: file.name, mime_type: file.type, words_per_segment: Number(wordsPerSentence) || 0 });
+      const response = await transcribeVideo({
+        file_url,
+        filename: file.name,
+        mime_type: file.type,
+        words_per_segment: segmentationMode === "fixed" ? Number(wordsPerSentence) || 0 : 0,
+      });
 
       if (response.data.error) {
         throw new Error(response.data.error);
@@ -228,6 +234,7 @@ export default function Subtitles() {
     setTranslateTarget("arabic");
     setDialect("msa");
     setIsTranslatingSub(false);
+    setSegmentationMode("auto");
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -503,16 +510,38 @@ Return only the translated SRT content, with timestamps untouched.
                   </div>
 
                   {!processing && !subtitles && (
-                    <div className="p-4 bg-gray-900 rounded-xl border border-gray-700">
-                      <Label htmlFor="preprocess-wps" className="text-gray-300 text-sm">Words per segment before transcription</Label>
-                      <Input
-                        id="preprocess-wps"
-                        type="number"
-                        min={1}
-                        value={wordsPerSentence}
-                        onChange={(e) => setWordsPerSentence(e.target.value)}
-                        className="mt-2 bg-black text-white border-gray-700"
-                      />
+                    <div className="p-4 bg-gray-900 rounded-xl border border-gray-700 space-y-4">
+                      <div>
+                        <Label className="text-gray-300 text-sm">Segmentation mode</Label>
+                        <Select value={segmentationMode} onValueChange={setSegmentationMode}>
+                          <SelectTrigger className="mt-2 bg-black text-white border-gray-700">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-black border-gray-700 text-white">
+                            <SelectItem value="auto">AI smart auto</SelectItem>
+                            <SelectItem value="fixed">Fixed words per segment</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {segmentationMode === "fixed" ? (
+                        <div>
+                          <Label htmlFor="preprocess-wps" className="text-gray-300 text-sm">Words per segment before transcription</Label>
+                          <Input
+                            id="preprocess-wps"
+                            type="number"
+                            min={1}
+                            value={wordsPerSentence}
+                            onChange={(e) => setWordsPerSentence(e.target.value)}
+                            className="mt-2 bg-black text-white border-gray-700"
+                          />
+                          <p className="text-xs text-gray-500 mt-2">Use this when you want a consistent line length.</p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400 leading-relaxed">
+                          AI smart auto splits subtitles based on pauses, stops, breath moments, sentence flow, and language changes for more natural caption timing.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -527,7 +556,8 @@ Return only the translated SRT content, with timestamps untouched.
                       <div className="text-sm text-yellow-400">
                         Duration: {Math.round(transcriptionInfo.duration)}s &bull;
                         Language: {transcriptionInfo.language} &bull;
-                        Segments: {transcriptionInfo.segments}
+                        Segments: {transcriptionInfo.segments} &bull;
+                        Mode: {segmentationMode === "auto" ? "AI smart auto" : "Fixed words"}
                       </div>
                     </div>
                   )}
