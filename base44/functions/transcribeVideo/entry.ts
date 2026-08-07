@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
     let filename = 'media';
     let mimeType = 'audio/mpeg';
     let wordsPerSegment = 0;
+    let requestedLanguage = '';
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -41,6 +42,7 @@ Deno.serve(async (req) => {
     } else {
       const body = await req.json();
       const fileUrl = body?.file_url;
+      requestedLanguage = normalizeRequestedLanguage(body?.transcription_language);
       filename = body?.filename || filename;
       mimeType = body?.mime_type || mimeType;
       wordsPerSegment = Math.max(1, Number(body?.words_per_segment) || 0);
@@ -71,10 +73,11 @@ Deno.serve(async (req) => {
     const transcription = await openai.audio.transcriptions.create({
       file: fileForOpenAI,
       model: 'whisper-1',
-      prompt: MULTILINGUAL_PROMPT,
+      prompt: buildTranscriptionPrompt(requestedLanguage),
       temperature: 0,
       response_format: 'verbose_json',
       timestamp_granularities: ['segment'],
+      ...(requestedLanguage ? { language: requestedLanguage } : {}),
     });
 
     const rawSegments = transcription.segments || [];
@@ -114,6 +117,26 @@ Deno.serve(async (req) => {
     }, { status: 500 });
   }
 });
+
+function normalizeRequestedLanguage(language) {
+  const value = String(language || '').trim().toLowerCase();
+  if (!value || value === 'auto') return '';
+  if (value === 'english' || value === 'en') return 'en';
+  if (value === 'arabic' || value === 'ar') return 'ar';
+  return '';
+}
+
+function buildTranscriptionPrompt(requestedLanguage) {
+  if (requestedLanguage === 'en') {
+    return 'Transcribe exactly what is spoken in English. Do not translate, summarize, or rewrite the speech.';
+  }
+
+  if (requestedLanguage === 'ar') {
+    return 'Transcribe exactly what is spoken in Arabic. Do not translate, summarize, or rewrite the speech.';
+  }
+
+  return MULTILINGUAL_PROMPT;
+}
 
 function ensureMixedLanguageSegments(rawSegments) {
   return rawSegments.flatMap((segment) => {

@@ -55,6 +55,7 @@ export default function Subtitles() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [dialect, setDialect] = useState("msa");
   const [isTranslatingSub, setIsTranslatingSub] = useState(false);
+  const [transcriptionLanguage, setTranscriptionLanguage] = useState("auto");
   const [segmentationMode, setSegmentationMode] = useState("auto");
   const [wordsPerSentence, setWordsPerSentence] = useState(8);
   const [sectionsCount, setSectionsCount] = useState(10);
@@ -165,6 +166,7 @@ export default function Subtitles() {
         file_url,
         filename: file.name,
         mime_type: file.type,
+        transcription_language: transcriptionLanguage,
         words_per_segment: segmentationMode === "fixed" ? Number(wordsPerSentence) || 0 : 0,
       });
 
@@ -234,6 +236,7 @@ export default function Subtitles() {
     setTranslateTarget("arabic");
     setDialect("msa");
     setIsTranslatingSub(false);
+    setTranscriptionLanguage("auto");
     setSegmentationMode("auto");
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -512,6 +515,21 @@ Return only the translated SRT content, with timestamps untouched.
                   {!processing && !subtitles && (
                     <div className="p-4 bg-gray-900 rounded-xl border border-gray-700 space-y-4">
                       <div>
+                        <Label className="text-gray-300 text-sm">Transcription language</Label>
+                        <Select value={transcriptionLanguage} onValueChange={setTranscriptionLanguage}>
+                          <SelectTrigger className="mt-2 bg-black text-white border-gray-700">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-black border-gray-700 text-white">
+                            <SelectItem value="auto">Auto detect</SelectItem>
+                            <SelectItem value="english">English</SelectItem>
+                            <SelectItem value="arabic">Arabic</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-500 mt-2">Choose a language up front or leave it on auto detect.</p>
+                      </div>
+
+                      <div>
                         <Label className="text-gray-300 text-sm">Segmentation mode</Label>
                         <Select value={segmentationMode} onValueChange={setSegmentationMode}>
                           <SelectTrigger className="mt-2 bg-black text-white border-gray-700">
@@ -557,7 +575,8 @@ Return only the translated SRT content, with timestamps untouched.
                         Duration: {Math.round(transcriptionInfo.duration)}s &bull;
                         Language: {transcriptionInfo.language} &bull;
                         Segments: {transcriptionInfo.segments} &bull;
-                        Mode: {segmentationMode === "auto" ? "AI smart auto" : "Fixed words"}
+                        Mode: {segmentationMode === "auto" ? "AI smart auto" : "Fixed words"} &bull;
+                        Input: {transcriptionLanguage === "auto" ? "Auto detect" : transcriptionLanguage}
                       </div>
                     </div>
                   )}
