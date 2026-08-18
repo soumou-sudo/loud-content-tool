@@ -14,6 +14,9 @@ const MAX_SEGMENT_CHARS = 90;
 const MIN_SEGMENT_CHARS = 18;
 const MIN_SEGMENT_WORDS = 3;
 const FALLBACK_WORDS_PER_CUE = 8;
+// Short sample-style text (NOT instructions) so auto mode keeps Arabic in Arabic
+// script instead of romanizing it. Long instruction prompts make Whisper loop.
+const BILINGUAL_STYLE_PROMPT = 'Hello everyone. مرحبا بكم.';
 
 Deno.serve(async (req) => {
   try {
@@ -45,7 +48,8 @@ Deno.serve(async (req) => {
       requestedLanguage = normalizeRequestedLanguage(body?.transcription_language);
       filename = body?.filename || filename;
       mimeType = body?.mime_type || mimeType;
-      wordsPerSegment = Math.max(1, Number(body?.words_per_segment) || 0);
+      const requestedWords = Number(body?.words_per_segment);
+      wordsPerSegment = Number.isFinite(requestedWords) && requestedWords >= 1 ? Math.floor(requestedWords) : 0;
 
       if (fileUrl) {
         const fetched = await fetch(fileUrl);
@@ -75,6 +79,7 @@ Deno.serve(async (req) => {
     const transcription = await openai.audio.transcriptions.create({
       file: fileForOpenAI,
       model: 'whisper-1',
+      ...(requestedLanguage ? {} : { prompt: BILINGUAL_STYLE_PROMPT }),
       temperature: 0,
       response_format: 'verbose_json',
       timestamp_granularities: ['segment'],
@@ -83,7 +88,7 @@ Deno.serve(async (req) => {
 
     const rawSegments = dropHallucinatedSegments(transcription.segments || []);
     const normalizedSegments = ensureMixedLanguageSegments(rawSegments);
-    const smartSegments = buildSmartSegments(normalizedSegments);
+    const smartSegments = splitOverlongSegments(buildSmartSegments(normalizedSegments));
     const withoutRepeats = dropRepeatedSegments(smartSegments);
     const segments = wordsPerSegment > 0 ? splitSegmentsByWordCount(withoutRepeats, wordsPerSegment) : withoutRepeats;
     const finalSegments = segments.length > 0
@@ -127,6 +132,65 @@ function normalizeRequestedLanguage(language) {
   if (value === 'english' || value === 'en') return 'en';
   if (value === 'arabic' || value === 'ar') return 'ar';
   return '';
+}
+
+// Whisper sometimes returns one very long segment for a whole passage. Merging
+// logic alone can never break that up, so split it on sentence ends, then on
+// word chunks, keeping timing proportional to the text.
+function splitOverlongSegments(segments) {
+  return segments.flatMap((segment) => {
+    const duration = Math.max(segment.end - segment.start, 0.01);
+    const pieces = splitIntoReadablePieces(segment.text, duration);
+    if (pieces.length <= 1) return [segment];
+
+    const totalChars = pieces.reduce((sum, piece) => sum + piece.length, 0) || pieces.length;
+    let cursor = segment.start;
+
+    return pieces.map((piece, index) => {
+      const isLast = index === pieces.length - 1;
+      const pieceEnd = isLast
+        ? segment.end
+        : Math.min(segment.end, cursor + (duration * piece.length) / totalChars);
+      const cue = { start: cursor, end: pieceEnd, text: piece, language: segment.language };
+      cursor = pieceEnd;
+      return cue;
+    });
+  });
+}
+
+function splitIntoReadablePieces(text, duration) {
+  const fullText = String(text || '').trim();
+  if (!fullText) return [];
+
+  // One cue should never carry several sentences, so sentence ends split first.
+  const sentences = fullText
+    .split(/(?<=[.!?؟…])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const totalChars = fullText.length || 1;
+
+  return sentences.flatMap((sentence) => {
+    const sentenceDuration = (duration * sentence.length) / totalChars;
+    const chunksNeeded = Math.max(
+      Math.ceil(sentence.length / MAX_SEGMENT_CHARS),
+      Math.ceil(sentenceDuration / MAX_SEGMENT_DURATION)
+    );
+
+    if (chunksNeeded <= 1) return [sentence];
+
+    // A single long sentence with no punctuation still has to be broken up,
+    // so chunk it on word boundaries into evenly sized pieces.
+    const words = sentence.split(/\s+/).filter(Boolean);
+    const wordsPerChunk = Math.ceil(words.length / chunksNeeded);
+    const chunks = [];
+
+    for (let index = 0; index < words.length; index += wordsPerChunk) {
+      chunks.push(words.slice(index, index + wordsPerChunk).join(' '));
+    }
+
+    return chunks.filter(Boolean);
+  });
 }
 
 // Whisper marks looped/hallucinated audio with a poor average logprob or a high
@@ -416,7 +480,9 @@ function splitSegmentsByWordCount(segments, wordsPerSegment) {
     return chunks;
   });
 
-  return rebalanceTinySegments(chunkedSegments.map(finalizeSegment));
+  // No tiny-segment rebalancing here: the user asked for an exact word count per
+  // line, and merging short chunks back would silently double some lines.
+  return chunkedSegments.map(finalizeSegment);
 }
 
 function formatTime(seconds) {
