@@ -13,7 +13,7 @@ const MAX_SEGMENT_DURATION = 6;
 const MAX_SEGMENT_CHARS = 90;
 const MIN_SEGMENT_CHARS = 18;
 const MIN_SEGMENT_WORDS = 3;
-const MULTILINGUAL_PROMPT = 'Transcribe exactly what is spoken. This audio may switch between English and Arabic. Keep each spoken language as originally spoken and do not translate, normalize, or rewrite one language into the other.';
+const FALLBACK_WORDS_PER_CUE = 8;
 
 Deno.serve(async (req) => {
   try {
@@ -70,26 +70,29 @@ Deno.serve(async (req) => {
     const safeName = mediaFile.name || filename;
     const fileForOpenAI = await toFile(mediaFile, safeName);
 
+    // No `prompt` is sent: Whisper treats the prompt as preceding transcript text,
+    // which makes it echo/loop and duplicate segments until the end of the file.
     const transcription = await openai.audio.transcriptions.create({
       file: fileForOpenAI,
       model: 'whisper-1',
-      prompt: buildTranscriptionPrompt(requestedLanguage),
       temperature: 0,
       response_format: 'verbose_json',
       timestamp_granularities: ['segment'],
       ...(requestedLanguage ? { language: requestedLanguage } : {}),
     });
 
-    const rawSegments = transcription.segments || [];
+    const rawSegments = dropHallucinatedSegments(transcription.segments || []);
     const normalizedSegments = ensureMixedLanguageSegments(rawSegments);
     const smartSegments = buildSmartSegments(normalizedSegments);
-    const segments = wordsPerSegment > 0 ? splitSegmentsByWordCount(smartSegments, wordsPerSegment) : smartSegments;
-    const srtContent = segments.length > 0
+    const withoutRepeats = dropRepeatedSegments(smartSegments);
+    const segments = wordsPerSegment > 0 ? splitSegmentsByWordCount(withoutRepeats, wordsPerSegment) : withoutRepeats;
+    const finalSegments = segments.length > 0
       ? segments
-          .map((segment, index) => `${index + 1}\n${formatTime(segment.start)} --> ${formatTime(segment.end)}\n${segment.text.trim()}\n`)
-          .join('\n')
-          .trim()
-      : `1\n00:00:00,000 --> 00:00:04,000\n${(transcription.text || 'No speech detected').trim()}\n`;
+      : buildFallbackSegments(transcription.text, transcription.duration);
+    const srtContent = finalSegments
+      .map((segment, index) => `${index + 1}\n${formatTime(segment.start)} --> ${formatTime(segment.end)}\n${segment.text.trim()}\n`)
+      .join('\n')
+      .trim();
 
     return Response.json({
       success: true,
@@ -126,16 +129,77 @@ function normalizeRequestedLanguage(language) {
   return '';
 }
 
-function buildTranscriptionPrompt(requestedLanguage) {
-  if (requestedLanguage === 'en') {
-    return 'Transcribe exactly what is spoken in English. Do not translate, summarize, or rewrite the speech.';
+// Whisper marks looped/hallucinated audio with a poor average logprob or a high
+// no-speech probability, and repeated text inflates the compression ratio.
+function dropHallucinatedSegments(rawSegments) {
+  return rawSegments.filter((segment) => {
+    const noSpeechProb = Number(segment.no_speech_prob);
+    const avgLogprob = Number(segment.avg_logprob);
+    const compressionRatio = Number(segment.compression_ratio);
+
+    if (Number.isFinite(noSpeechProb) && noSpeechProb > 0.6) return false;
+    if (Number.isFinite(avgLogprob) && avgLogprob < -1) return false;
+    if (Number.isFinite(compressionRatio) && compressionRatio > 2.4) return false;
+
+    return true;
+  });
+}
+
+// Collapses the runaway "same line over and over" tail Whisper produces when it
+// gets stuck, while leaving genuine repeated phrases (a line said twice) intact.
+function dropRepeatedSegments(segments) {
+  const result = [];
+  let previousKey = '';
+  let repeatCount = 0;
+
+  for (const segment of segments) {
+    const key = repeatKey(segment.text);
+
+    if (key && key === previousKey) {
+      repeatCount += 1;
+      if (repeatCount >= 2) continue;
+    } else {
+      repeatCount = 0;
+      previousKey = key;
+    }
+
+    result.push(segment);
   }
 
-  if (requestedLanguage === 'ar') {
-    return 'Transcribe exactly what is spoken in Arabic. Do not translate, summarize, or rewrite the speech.';
+  return result;
+}
+
+function repeatKey(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Used only when Whisper returns no usable timed segments: spreads the plain
+// transcript over the media duration instead of dumping it into one cue.
+function buildFallbackSegments(text, duration) {
+  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+
+  if (!words.length) {
+    return [{ start: 0, end: 4, text: 'No speech detected' }];
   }
 
-  return MULTILINGUAL_PROMPT;
+  const totalDuration = Number(duration) > 0 ? Number(duration) : words.length * 0.45;
+  const wordDuration = totalDuration / words.length;
+  const cues = [];
+
+  for (let index = 0; index < words.length; index += FALLBACK_WORDS_PER_CUE) {
+    const chunk = words.slice(index, index + FALLBACK_WORDS_PER_CUE);
+    cues.push({
+      start: wordDuration * index,
+      end: wordDuration * (index + chunk.length),
+      text: chunk.join(' '),
+    });
+  }
+
+  return cues;
 }
 
 function ensureMixedLanguageSegments(rawSegments) {
