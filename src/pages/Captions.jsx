@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import WorkspaceHeading from '@/components/WorkspaceHeading';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -207,19 +208,9 @@ export default function Captions() {
   };
 
   return (
-    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-black">
-      <div className="max-w-5xl mx-auto section-fade">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6 pill border-[rgba(245,217,10,0.35)] bg-[rgba(245,217,10,0.08)] text-yellow-400">
-            <Languages className="w-4 h-4" />
-            <span className="text-sm font-medium">AI Translation Studio</span>
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-4">Caption Translation</h1>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-            Intelligent Arabic-English translation with full customization for tone, style, and context
-          </p>
-        </div>
+    <div className="studio-workspace min-h-screen px-6 lg:px-10 bg-background text-foreground">
+      <div className="max-w-7xl mx-auto">
+        <WorkspaceHeading number="02" label="English ↔ Arabic" title="Caption translation" description="A new language. The same voice. Fine-tune your dialect, tone, and context for the people you want to reach." />
 
         {error && (
           <Alert variant="destructive" className="mb-8 max-w-2xl mx-auto bg-red-900/20 border-red-800 text-red-300">
@@ -238,9 +229,9 @@ export default function Captions() {
         <div className="space-y-8">
           {/* Translation Configuration */}
           <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-yellow-400" />
+            <CardHeader className="studio-card-heading">
+              <CardTitle className="flex items-center gap-3 text-base font-medium">
+                <Languages className="w-5 h-5 text-primary" strokeWidth={1.5} />
                 <span className="text-white">Translation Settings</span>
               </CardTitle>
             </CardHeader>
@@ -364,7 +355,7 @@ export default function Captions() {
               </div>
 
               {/* Current Settings Display */}
-              <div className="flex flex-wrap gap-2 p-4 rounded-2xl border border-white/10 bg-white/[0.03] shadow-inner">
+              <div className="flex flex-wrap gap-2 border-t border-border pt-5">
                 <Badge variant="outline" className="border-gray-700 text-gray-300 bg-gray-800">
                   {sourceLanguage} → {targetLanguage}
                 </Badge>
@@ -394,8 +385,8 @@ export default function Captions() {
           <div className="grid lg:grid-cols-2 gap-8">
             {/* Input */}
             <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="studio-card-heading">
+                <CardTitle className="flex items-center gap-3 text-base font-medium">
                   <Type className="w-5 h-5 text-yellow-400" />
                   <span className="text-white">Original Caption</span>
                 </CardTitle>
@@ -426,7 +417,7 @@ export default function Captions() {
                       <Button
                         onClick={translateCaption}
                         disabled={isTranslating || !originalText.trim()}
-                        className="btn-primary bg-gradient-to-r from-yellow-500 to-orange-500 text-black hover:from-yellow-600 hover:to-orange-600"
+                        className="btn-primary h-10 px-5"
                       >
                         {isTranslating ? (
                           <>
@@ -448,9 +439,9 @@ export default function Captions() {
 
             {/* Output */}
             <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
-              <CardHeader className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-yellow-400" />
+              <CardHeader className="studio-card-heading flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="flex items-center gap-3 text-base font-medium">
+                  <Languages className="w-5 h-5 text-primary" strokeWidth={1.5} />
                   <span className="text-white">Translated Caption</span>
                 </CardTitle>
                 <Button
@@ -514,9 +505,8 @@ export default function Captions() {
           <Card className="premium-panel panel-border-glow rounded-[28px] border border-white/10 bg-[#0b0b0b] hover-lift">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                     style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}>
-                  <Sparkles className="w-5 h-5 text-black" />
+                <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center shrink-0">
+                  <Languages className="w-5 h-5 text-primary" strokeWidth={1.5} />
                 </div>
                 <div>
                   <h3 className="font-semibold text-white mb-2">AI-Powered Translation</h3>

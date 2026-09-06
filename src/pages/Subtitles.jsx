@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import WorkspaceHeading from '@/components/WorkspaceHeading';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -427,19 +428,9 @@ Return only the translated SRT content, with timestamps untouched.
   );
 
   return (
-    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-black text-gray-300">
-      <div className="max-w-6xl mx-auto section-fade">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6 border text-yellow-400"
-               style={{ borderColor: 'rgba(245,217,10,0.35)', background: 'rgba(245,217,10,0.08)' }}>
-            <Mic className="w-4 h-4" />
-            <span className="text-sm font-medium">OpenAI Whisper Integration</span>
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-4">AI Audio & Video Transcription</h1>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-            Upload your video or audio file and our AI will extract all spoken words with precise timestamps using OpenAI's Whisper
-          </p>
-        </div>
+    <div className="studio-workspace min-h-screen px-6 lg:px-10 bg-background text-foreground">
+      <div className="max-w-7xl mx-auto">
+        <WorkspaceHeading number="01" label="Audio & video studio" title="Subtitles" description="Upload your footage. Shape the words. Export time-synced subtitles, ready for your next edit." />
 
         {error && (
           <Alert variant="destructive" className="mb-8 max-w-2xl mx-auto bg-red-900 border-red-700 text-red-200">
@@ -450,8 +441,8 @@ Return only the translated SRT content, with timestamps untouched.
 
         <div className="grid lg:grid-cols-2 gap-8">
           <Card className="glass-effect border-0 shadow-xl bg-gray-900">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
+            <CardHeader className="studio-card-heading">
+              <CardTitle className="flex items-center gap-3 text-base font-medium text-foreground">
                 <Upload className="w-5 h-5 text-yellow-400" />
                 Upload Video or Audio
               </CardTitle>
@@ -463,7 +454,7 @@ Return only the translated SRT content, with timestamps untouched.
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                  className={`border border-dashed rounded-md px-6 py-12 text-center transition-colors ${
                     dragActive ? 'border-yellow-400 bg-gray-800' : 'border-gray-700 hover:border-gray-600'
                   }`}
                 >
@@ -474,13 +465,13 @@ Return only the translated SRT content, with timestamps untouched.
                     onChange={handleFileInput}
                     className="hidden"
                   />
-                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-12 h-12 border border-border rounded-md flex items-center justify-center mx-auto mb-6">
                     <Video className="w-8 h-8 text-yellow-400" />
                   </div>
                   <h3 className="text-lg font-semibold text-white mb-2">Drop your video or audio here</h3>
                   <p className="text-gray-400 mb-4">or click to browse</p>
                   <Button onClick={() => fileInputRef.current?.click()}
-                          className="bg-yellow-500 hover:bg-yellow-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                          className="btn-primary h-11 px-6 font-medium">
                     Choose File
                   </Button>
                   <div className="mt-4 text-sm text-gray-500">
@@ -584,13 +575,13 @@ Return only the translated SRT content, with timestamps untouched.
                   {!processing && !subtitles && (
                     isAuthenticated ? (
                       <Button onClick={processVideo} 
-                              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95">
+                              className="w-full btn-primary font-medium h-11 px-4">
                         <Mic className="w-4 h-4 mr-2" />
                         Transcribe with OpenAI Whisper
                       </Button>
                     ) : (
                       <Button onClick={() => base44.auth.redirectToLogin(window.location.href)}
-                              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95">
+                              className="w-full btn-primary font-medium h-11 px-4">
                         <Mic className="w-4 h-4 mr-2" />
                         Sign In to Transcribe
                       </Button>
@@ -612,8 +603,8 @@ Return only the translated SRT content, with timestamps untouched.
           </Card>
 
           <Card className="glass-effect border-0 shadow-xl bg-gray-900">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
+            <CardHeader className="studio-card-heading">
+              <CardTitle className="flex items-center gap-3 text-base font-medium text-foreground">
                 <FileText className="w-5 h-5 text-yellow-400" />
                 Transcribed Subtitles
               </CardTitle>
@@ -656,7 +647,7 @@ Return only the translated SRT content, with timestamps untouched.
                   <div className="flex gap-2">
                     <Button
                       onClick={() => downloadSubtitles('srt')}
-                      className="flex-1 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95"
+                      className="flex-1 btn-primary font-medium h-11 px-4"
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Download SRT
@@ -709,7 +700,7 @@ Return only the translated SRT content, with timestamps untouched.
                         <Button
                           onClick={translateSubtitles}
                           disabled={isTranslatingSub || !editedSubtitles.trim()}
-                          className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black"
+                          className="w-full btn-primary"
                         >
                           {isTranslatingSub ? (
                             <>
@@ -742,7 +733,7 @@ Return only the translated SRT content, with timestamps untouched.
                         <Input id="sections" type="number" min={1} value={sectionsCount} onChange={(e)=>setSectionsCount(e.target.value)} className="mt-1 bg-black text-white border-gray-700" />
                       </div>
                       <div className="sm:col-span-1 flex gap-2">
-                        <Button onClick={applyWordsPerSentence} disabled={!editedSubtitles.trim()} className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black">
+                        <Button onClick={applyWordsPerSentence} disabled={!editedSubtitles.trim()} className="w-full btn-primary">
                           Apply words/line
                         </Button>
                       </div>
@@ -761,7 +752,7 @@ Return only the translated SRT content, with timestamps untouched.
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-12 text-gray-600">
+                <div className="flex min-h-[320px] flex-col items-center justify-center px-5 py-12 text-center text-muted-foreground">
                   <Mic className="w-12 h-12 mx-auto mb-4 opacity-50 text-gray-700" />
                   <p>Upload a video or audio file to extract subtitles</p>
                   <p className="text-sm mt-2 text-gray-600">Powered by OpenAI Whisper</p>

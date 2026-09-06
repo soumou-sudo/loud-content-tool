@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import WorkspaceHeading from '@/components/WorkspaceHeading';
 import { User, CaptionHistory } from "@/entities/all";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,23 +86,13 @@ export default function History() {
 
   if (!user) {
     return (
-      <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-black">
-        <div className="max-w-4xl mx-auto text-center section-fade">
-          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6 pill">
-            <UserIcon className="w-4 h-4" />
-            <span className="text-sm font-medium">Account Required</span>
-          </div>
-          
-          <h1 className="text-4xl font-bold text-white mb-4">Translation History</h1>
-          <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Sign in to save your translations and access them anytime
-          </p>
-          
-          <Card className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-xl max-w-md mx-auto">
+      <div className="studio-workspace min-h-screen px-6 lg:px-10 bg-background text-foreground">
+        <div className="max-w-7xl mx-auto">
+          <WorkspaceHeading number="03" label="Your library" title="Translation history" description="Sign in to keep your translations together and return to them whenever inspiration calls." />
+          <Card className="premium-panel max-w-lg mx-auto">
             <CardContent className="p-8 text-center">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
-                   style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}>
-                <HistoryIcon className="w-8 h-8 text-black" />
+              <div className="w-12 h-12 border border-border rounded-md flex items-center justify-center mx-auto mb-6">
+                <HistoryIcon className="w-6 h-6 text-primary" strokeWidth={1.5} />
               </div>
               <h3 className="text-lg font-semibold text-white mb-4">Save Your Work</h3>
               <p className="text-gray-300 mb-6">
@@ -122,19 +113,9 @@ export default function History() {
   }
 
   return (
-    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-black">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6 pill">
-            <HistoryIcon className="w-4 h-4" />
-            <span className="text-sm font-medium">Your Translations</span>
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-4">Translation History</h1>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-            Access and manage your saved caption translations
-          </p>
-        </div>
+    <div className="studio-workspace min-h-screen px-6 lg:px-10 bg-background text-foreground">
+      <div className="max-w-7xl mx-auto">
+        <WorkspaceHeading number="03" label="Your library" title="Translation history" description="Good words are worth keeping. Find, revisit, and reuse your saved caption translations." />
 
         {error && (
           <Alert variant="destructive" className="mb-8">
@@ -146,9 +127,8 @@ export default function History() {
         <Card className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-lg mb-8">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center"
-                   style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}>
-                <UserIcon className="w-6 h-6 text-black" />
+              <div className="w-10 h-10 border border-border rounded-full flex items-center justify-center">
+                <UserIcon className="w-5 h-5 text-muted-foreground" />
               </div>
               <div>
                 <h3 className="font-semibold text-white">Welcome back, {user.full_name}</h3>
@@ -166,20 +146,19 @@ export default function History() {
                 <CardHeader className="pb-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                           style={{ background: 'linear-gradient(135deg, #f5d90a, #facc15)' }}>
-                        <Languages className="w-5 h-5 text-black" />
+                      <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center shrink-0">
+                        <Languages className="w-5 h-5 text-primary" strokeWidth={1.5} />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <Badge variant="outline" className="rounded-sm text-xs text-muted-foreground border-border font-normal">
                             {translation.source_language} → {translation.target_language}
                           </Badge>
-                          <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400">
+                          <Badge variant="outline" className="rounded-sm text-xs text-muted-foreground border-border font-normal">
                             {translation.translation_style}
                           </Badge>
                           {translation.gender_context && (
-                            <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400">
+                            <Badge variant="outline" className="rounded-sm text-xs text-muted-foreground border-border font-normal">
                               {translation.gender_context}
                             </Badge>
                           )}
