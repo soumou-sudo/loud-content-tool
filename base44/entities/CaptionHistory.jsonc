@@ -59,11 +59,17 @@
     "translation_style"
   ],
   "rls": {
-    "read": {
-      "created_by": "{{user.email}}"
+    "create": {
+      "data.user_id": "{{user.id}}"
     },
-    "write": {
-      "created_by": "{{user.email}}"
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
     }
   }
 }
