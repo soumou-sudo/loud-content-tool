@@ -86,10 +86,10 @@ export default function History() {
 
   if (!user) {
     return (
-      <div className="studio-workspace min-h-screen px-6 lg:px-10 bg-background text-foreground">
+      <div className="studio-workspace studio-tool-page min-h-screen px-6 lg:px-10 bg-background text-foreground">
         <div className="max-w-7xl mx-auto">
           <WorkspaceHeading number="03" label="Your library" title="Translation history" description="Sign in to keep your translations together and return to them whenever inspiration calls." />
-          <Card className="premium-panel max-w-lg mx-auto">
+          <Card className="studio-panel max-w-lg mx-auto">
             <CardContent className="p-8 text-center">
               <div className="w-12 h-12 border border-border rounded-md flex items-center justify-center mx-auto mb-6">
                 <HistoryIcon className="w-6 h-6 text-primary" strokeWidth={1.5} />
@@ -113,7 +113,7 @@ export default function History() {
   }
 
   return (
-    <div className="studio-workspace min-h-screen px-6 lg:px-10 bg-background text-foreground">
+    <div className="studio-workspace studio-tool-page min-h-screen px-6 lg:px-10 bg-background text-foreground">
       <div className="max-w-7xl mx-auto">
         <WorkspaceHeading number="03" label="Your library" title="Translation history" description="Good words are worth keeping. Find, revisit, and reuse your saved caption translations." />
 
@@ -124,7 +124,7 @@ export default function History() {
         )}
 
         {/* User Info */}
-        <Card className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-lg mb-8">
+        <Card className="studio-panel mb-5">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 border border-border rounded-full flex items-center justify-center">
@@ -140,10 +140,10 @@ export default function History() {
 
         {/* History List */}
         {history.length > 0 ? (
-          <div className="grid gap-6">
+          <div className="grid gap-4">
             {history.map((translation) => (
-              <Card key={translation.id} className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-lg hover-lift transition-shadow duration-200">
-                <CardHeader className="pb-4">
+              <Card key={translation.id} className="studio-panel">
+                <CardHeader className="studio-panel-header">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center shrink-0">
@@ -172,11 +172,11 @@ export default function History() {
                   </div>
                 </CardHeader>
                 
-                <CardContent className="space-y-4">
+                <CardContent className="grid gap-5 pt-6 md:grid-cols-2">
                   {/* Original Text */}
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-300">Original ({translation.source_language})</div>
-                    <div className="p-4 bg-black/50 border border-white/10 rounded-2xl text-gray-200 text-sm shadow-inner">
+                    <div className="studio-subpanel min-h-28 text-sm text-foreground">
                       {translation.original_text}
                     </div>
                   </div>
@@ -184,13 +184,13 @@ export default function History() {
                   {/* Translated Text */}
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-300">Translation ({translation.target_language})</div>
-                    <div className="p-4 bg-black/50 border border-white/10 rounded-2xl text-yellow-300 text-sm shadow-inner">
+                    <div className="studio-subpanel min-h-28 text-sm text-primary">
                       {translation.translated_text}
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex flex-wrap gap-2 border-t border-border pt-5 md:col-span-2">
                     <Button variant="outline" size="sm" onClick={() => copyToClipboard(translation.original_text)} className="btn-outline-dark">
                       <Copy className="w-4 h-4 mr-2" />
                       Copy Original
@@ -205,9 +205,9 @@ export default function History() {
             ))}
           </div>
         ) : (
-          <Card className="premium-panel panel-border-glow rounded-[28px] border-0 shadow-xl hover-lift">
+          <Card className="studio-panel">
             <CardContent className="p-12 text-center">
-              <FileText className="w-16 h-16 mx-auto mb-6 text-gray-400" />
+              <div className="mx-auto mb-6 w-fit border border-border p-4"><FileText className="h-7 w-7 text-primary" strokeWidth={1.4} /></div>
               <h3 className="text-xl font-semibold text-white mb-2">No translations yet</h3>
               <p className="text-gray-300 mb-6">
                 Start translating captions to see your history here

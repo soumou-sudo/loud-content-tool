@@ -428,7 +428,7 @@ Return only the translated SRT content, with timestamps untouched.
   );
 
   return (
-    <div className="studio-workspace min-h-screen px-6 lg:px-10 bg-background text-foreground">
+    <div className="studio-workspace studio-tool-page min-h-screen px-6 lg:px-10 bg-background text-foreground">
       <div className="max-w-7xl mx-auto">
         <WorkspaceHeading number="01" label="Audio & video studio" title="Subtitles" description="Upload your footage. Shape the words. Export time-synced subtitles, ready for your next edit." />
 
@@ -439,9 +439,9 @@ Return only the translated SRT content, with timestamps untouched.
           </Alert>
         )}
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          <Card className="glass-effect border-0 shadow-xl bg-gray-900">
-            <CardHeader className="studio-card-heading">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <Card className="studio-panel">
+            <CardHeader className="studio-panel-header">
               <CardTitle className="flex items-center gap-3 text-base font-medium text-foreground">
                 <Upload className="w-5 h-5 text-yellow-400" />
                 Upload Video or Audio
@@ -454,8 +454,8 @@ Return only the translated SRT content, with timestamps untouched.
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  className={`border border-dashed rounded-md px-6 py-12 text-center transition-colors ${
-                    dragActive ? 'border-yellow-400 bg-gray-800' : 'border-gray-700 hover:border-gray-600'
+                  className={`studio-dropzone px-6 py-14 text-center transition-colors ${
+                    dragActive ? 'border-primary bg-secondary' : 'border-input hover:border-primary'
                   }`}
                 >
                   <input
@@ -504,7 +504,7 @@ Return only the translated SRT content, with timestamps untouched.
                   </div>
 
                   {!processing && !subtitles && (
-                    <div className="p-4 bg-gray-900 rounded-xl border border-gray-700 space-y-4">
+                    <div className="studio-subpanel space-y-5">
                       <div>
                         <Label className="text-gray-300 text-sm">Transcription language</Label>
                         <Select value={transcriptionLanguage} onValueChange={setTranscriptionLanguage}>
@@ -602,8 +602,8 @@ Return only the translated SRT content, with timestamps untouched.
             </CardContent>
           </Card>
 
-          <Card className="glass-effect border-0 shadow-xl bg-gray-900">
-            <CardHeader className="studio-card-heading">
+          <Card className="studio-panel">
+            <CardHeader className="studio-panel-header">
               <CardTitle className="flex items-center gap-3 text-base font-medium text-foreground">
                 <FileText className="w-5 h-5 text-yellow-400" />
                 Transcribed Subtitles
@@ -637,7 +637,7 @@ Return only the translated SRT content, with timestamps untouched.
                       className="min-h-[300px] font-mono text-sm bg-gray-800 text-gray-300 border-gray-700 focus:border-yellow-400"
                     />
                   ) : (
-                    <div className="bg-gray-900 rounded-xl p-4 max-h-[300px] overflow-y-auto border border-gray-700">
+                    <div className="studio-subpanel max-h-[320px] overflow-y-auto">
                       <pre className="text-sm whitespace-pre-wrap font-mono text-gray-300">
                         {editedSubtitles}
                       </pre>
@@ -663,7 +663,7 @@ Return only the translated SRT content, with timestamps untouched.
                   </div>
 
                   {/* Translate Subtitles Panel */}
-                  <div className="mt-2 p-4 bg-gray-900 rounded-xl border border-gray-700">
+                  <div className="studio-subpanel mt-3">
                     <div className="flex items-center gap-2 mb-3">
                       <Languages className="w-4 h-4 text-yellow-400" />
                       <span className="text-sm text-gray-300">Translate subtitles</span>
@@ -719,7 +719,7 @@ Return only the translated SRT content, with timestamps untouched.
                   </div>
 
                   {/* Resection Controls */}
-                  <div className="mt-2 p-4 bg-gray-900 rounded-xl border border-gray-700">
+                  <div className="studio-subpanel mt-3">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-sm text-gray-300">Resegment subtitles</span>
                     </div>
@@ -753,7 +753,7 @@ Return only the translated SRT content, with timestamps untouched.
                 </div>
               ) : (
                 <div className="flex min-h-[320px] flex-col items-center justify-center px-5 py-12 text-center text-muted-foreground">
-                  <Mic className="w-12 h-12 mx-auto mb-4 opacity-50 text-gray-700" />
+                  <div className="mb-6 border border-border p-4"><Mic className="h-7 w-7 text-primary" strokeWidth={1.4} /></div>
                   <p>Upload a video or audio file to extract subtitles</p>
                   <p className="text-sm mt-2 text-gray-600">Powered by OpenAI Whisper</p>
                 </div>

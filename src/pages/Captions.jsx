@@ -208,7 +208,7 @@ export default function Captions() {
   };
 
   return (
-    <div className="studio-workspace min-h-screen px-6 lg:px-10 bg-background text-foreground">
+    <div className="studio-workspace studio-tool-page min-h-screen px-6 lg:px-10 bg-background text-foreground">
       <div className="max-w-7xl mx-auto">
         <WorkspaceHeading number="02" label="English ↔ Arabic" title="Caption translation" description="A new language. The same voice. Fine-tune your dialect, tone, and context for the people you want to reach." />
 
@@ -226,10 +226,10 @@ export default function Captions() {
           </Alert>
         )}
 
-        <div className="space-y-8">
+        <div className="space-y-5">
           {/* Translation Configuration */}
-          <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
-            <CardHeader className="studio-card-heading">
+          <Card className="studio-panel">
+            <CardHeader className="studio-panel-header">
               <CardTitle className="flex items-center gap-3 text-base font-medium">
                 <Languages className="w-5 h-5 text-primary" strokeWidth={1.5} />
                 <span className="text-white">Translation Settings</span>
@@ -382,10 +382,10 @@ export default function Captions() {
           </Card>
 
           {/* Translation Interface */}
-          <div className="grid lg:grid-cols-2 gap-8">
+          <div className="grid items-start gap-4 lg:grid-cols-2">
             {/* Input */}
-            <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
-              <CardHeader className="studio-card-heading">
+            <Card className="studio-panel">
+              <CardHeader className="studio-panel-header">
                 <CardTitle className="flex items-center gap-3 text-base font-medium">
                   <Type className="w-5 h-5 text-yellow-400" />
                   <span className="text-white">Original Caption</span>
@@ -397,7 +397,7 @@ export default function Captions() {
                     value={originalText}
                     onChange={(e) => setOriginalText(e.target.value)}
                     placeholder="Enter your caption text here (4-10 lines recommended)..."
-                    className="min-h-[200px] resize-none rounded-2xl bg-black/60 text-white border-white/10 placeholder:text-gray-500 focus-visible:ring-offset-black"
+                    className="min-h-[240px] resize-none bg-background text-foreground border-border placeholder:text-muted-foreground"
                     maxLength={1000}
                   />
                   <div className="flex items-center justify-between">
@@ -438,8 +438,8 @@ export default function Captions() {
             </Card>
 
             {/* Output */}
-            <Card className="premium-panel panel-border-glow rounded-[28px] border-gray-800 shadow-xl bg-gray-900/40">
-              <CardHeader className="studio-card-heading flex flex-row items-center justify-between space-y-0">
+            <Card className="studio-panel">
+              <CardHeader className="studio-panel-header flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="flex items-center gap-3 text-base font-medium">
                   <Languages className="w-5 h-5 text-primary" strokeWidth={1.5} />
                   <span className="text-white">Translated Caption</span>
@@ -461,10 +461,10 @@ export default function Captions() {
                       <Textarea
                         value={translatedText}
                         onChange={(e) => setTranslatedText(e.target.value)}
-                        className="min-h-[220px] resize-none rounded-2xl bg-black/60 text-white border-white/10 focus-visible:ring-offset-black focus-visible:ring-2 focus-visible:ring-yellow-500"
+                        className="min-h-[240px] resize-none bg-background text-foreground border-border"
                       />
                     ) : (
-                      <div className="bg-black/60 border border-white/10 rounded-2xl p-4 min-h-[200px] shadow-inner">
+                      <div className="studio-subpanel min-h-[240px]">
                         <div className="whitespace-pre-wrap text-white">
                           {translatedText}
                         </div>
@@ -502,7 +502,7 @@ export default function Captions() {
           </div>
 
           {/* Info Card */}
-          <Card className="premium-panel panel-border-glow rounded-[28px] border border-white/10 bg-[#0b0b0b] hover-lift">
+          <Card className="studio-panel">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center shrink-0">
