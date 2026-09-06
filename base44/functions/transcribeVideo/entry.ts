@@ -1,10 +1,7 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import OpenAI from 'npm:openai@4.57.0';
 import { toFile } from 'npm:openai@4.57.0/uploads';
-
-const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY'),
-});
+import { secrets } from 'base44:runtime';
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 const PAUSE_SPLIT_THRESHOLD = 1.2;
@@ -18,7 +15,7 @@ const FALLBACK_WORDS_PER_CUE = 8;
 // script instead of romanizing it. Long instruction prompts make Whisper loop.
 const BILINGUAL_STYLE_PROMPT = 'Hello everyone. مرحبا بكم.';
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -52,9 +49,14 @@ Deno.serve(async (req) => {
       wordsPerSegment = Number.isFinite(requestedWords) && requestedWords >= 1 ? Math.floor(requestedWords) : 0;
 
       if (fileUrl) {
-        const fetched = await fetch(fileUrl);
+        const fetched = await fetchPublicMedia(fileUrl);
         if (!fetched.ok) {
           return Response.json({ error: 'Could not read the uploaded file.' }, { status: 400 });
+        }
+
+        const contentLength = Number(fetched.headers.get('content-length') || 0);
+        if (contentLength > MAX_FILE_SIZE_BYTES) {
+          return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
         }
 
         const blob = await fetched.blob();
@@ -71,6 +73,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
     }
 
+    const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
     const safeName = mediaFile.name || filename;
     const fileForOpenAI = await toFile(mediaFile, safeName);
 
@@ -120,11 +123,82 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
     }
 
-    return Response.json({
-      error: error?.message || 'Transcription failed. Please try again.',
-    }, { status: 500 });
+    if (error?.message === 'Invalid uploaded file URL.') {
+      return Response.json({ error: 'Invalid uploaded file URL.' }, { status: 400 });
+    }
+
+    return Response.json({ error: 'Transcription failed. Please try again.' }, { status: 500 });
   }
-});
+}
+
+async function fetchPublicMedia(inputUrl) {
+  let currentUrl = new URL(String(inputUrl));
+
+  for (let redirectCount = 0; redirectCount <= 3; redirectCount += 1) {
+    await assertPublicHttpsUrl(currentUrl);
+    const response = await fetch(currentUrl, { redirect: 'manual' });
+
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    if (redirectCount === 3) throw new Error('Invalid uploaded file URL.');
+
+    const location = response.headers.get('location');
+    if (!location) throw new Error('Invalid uploaded file URL.');
+    currentUrl = new URL(location, currentUrl);
+  }
+
+  throw new Error('Invalid uploaded file URL.');
+}
+
+async function assertPublicHttpsUrl(url) {
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new Error('Invalid uploaded file URL.');
+  }
+
+  const hostname = url.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+  if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    throw new Error('Invalid uploaded file URL.');
+  }
+
+  if (isBlockedAddress(hostname)) throw new Error('Invalid uploaded file URL.');
+
+  const lookups = await Promise.allSettled([
+    Deno.resolveDns(hostname, 'A'),
+    Deno.resolveDns(hostname, 'AAAA'),
+  ]);
+  const addresses = lookups.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
+
+  if (!addresses.length || addresses.some(isBlockedAddress)) {
+    throw new Error('Invalid uploaded file URL.');
+  }
+}
+
+function isBlockedAddress(address) {
+  const value = String(address).toLowerCase().replace(/^\[|\]$/g, '');
+  const mappedIpv4 = value.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
+  if (mappedIpv4) return isBlockedIpv4(mappedIpv4);
+
+  if (value.includes(':')) {
+    return value === '::' || value === '::1' || value.startsWith('fc') ||
+      value.startsWith('fd') || /^fe[89ab]/.test(value);
+  }
+
+  return isBlockedIpv4(value);
+}
+
+function isBlockedIpv4(address) {
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(address)) return false;
+  const parts = address.split('.').map(Number);
+  if (parts.some((part) => part < 0 || part > 255)) return true;
+  const [a, b] = parts;
+
+  return a === 0 || a === 10 || a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224;
+}
 
 function normalizeRequestedLanguage(language) {
   const value = String(language || '').trim().toLowerCase();
