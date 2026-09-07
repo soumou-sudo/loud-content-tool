@@ -22,7 +22,8 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { InvokeLLM, UploadFile } from "@/integrations/Core";
+import { UploadFile } from "@/integrations/Core";
+import { translateText } from "@/functions/translateText";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { base44 } from "@/api/base44Client";
@@ -248,34 +249,15 @@ export default function Subtitles() {
     setError(null);
 
     try {
-      const dialectText = translateTarget === 'arabic'
-        ? `
-Arabic Dialect: ${arabicDialects.find(d => d.value === dialect)?.label || dialect}.
-Use authentic phrasing of this dialect while remaining clear for broad audiences.
-`
-        : '';
-
-      const prompt = `
-Translate the subtitle text within the following SRT content to ${translateTarget}.
-- Keep all SRT numbering and timestamp lines EXACTLY as they are.
-- Translate ONLY the dialogue text lines (the lines after the timestamps).
-- Do not add, remove, merge, or split segments.
-- Preserve existing line breaks and keep punctuation natural.
-${dialectText}
-
-Original SRT:
-"""
-${editedSubtitles}
-"""
-
-Return only the translated SRT content, with timestamps untouched.
-`;
-      const result = await InvokeLLM({
-        prompt,
-        add_context_from_internet: false
+      const response = await translateText({
+        mode: "srt",
+        text: editedSubtitles,
+        target_language: translateTarget,
+        dialect,
       });
+      if (response.data.error) throw new Error(response.data.error);
 
-      setEditedSubtitles(result.trim());
+      setEditedSubtitles(response.data.translation);
       setIsEditing(false);
     } catch (err) {
       console.error("Translation error:", err);
