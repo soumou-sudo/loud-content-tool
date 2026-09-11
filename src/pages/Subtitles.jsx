@@ -261,7 +261,8 @@ export default function Subtitles() {
       setIsEditing(false);
     } catch (err) {
       console.error("Translation error:", err);
-      setError("Failed to translate subtitles. Please try again.");
+      if ((err?.response?.status || err?.status) === 401) setIsAuthenticated(false);
+      setError(err?.response?.data?.error || err.message || "Failed to translate subtitles. Please try again.");
     } finally {
       setIsTranslatingSub(false);
     }

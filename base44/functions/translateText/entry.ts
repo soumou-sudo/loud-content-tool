@@ -19,8 +19,8 @@ const MAX_SRT_CHARS = 30000;
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Please sign in to translate.' }, { status: 401 });
+    const user = await base44.auth.me().catch(() => null);
+    if (!user) return Response.json({ error: 'Your session has expired. Please sign in again to translate.' }, { status: 401 });
 
     const body = await req.json();
     const mode = body?.mode === 'srt' ? 'srt' : 'caption';
@@ -52,7 +52,7 @@ export default async function(req) {
     return Response.json({ translation: String(result || '').trim() });
   } catch (error) {
     console.error('Translation error:', error);
-    return Response.json({ error: 'Translation failed. Please try again.' }, { status: 500 });
+    return Response.json({ error: `Translation failed: ${error?.message || 'unknown error'}` }, { status: 500 });
   }
 }
 

@@ -16,8 +16,10 @@ import {
   Save,
   CheckCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  LogIn
 } from "lucide-react";
+import { base44 } from "@/api/base44Client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Slider } from "@/components/ui/slider";
 
@@ -91,11 +93,16 @@ export default function Captions() {
 
     } catch (error) {
       console.error("Translation error:", error);
-      setError("Failed to translate caption. Please try again.");
+      const status = error?.response?.status || error?.status;
+      const apiMsg = error?.response?.data?.error;
+      if (status === 401) setUser(null);
+      setError(apiMsg || error.message || "Failed to translate caption. Please try again.");
     } finally {
       setIsTranslating(false);
     }
   };
+
+  const handleLogin = () => base44.auth.redirectToLogin(window.location.href);
 
   const saveToHistory = async () => {
     if (!user) {
@@ -362,6 +369,12 @@ export default function Captions() {
                       >
                         Clear
                       </Button>
+                      {!user ? (
+                      <Button onClick={handleLogin} className="btn-primary h-10 px-5">
+                        <LogIn className="w-4 h-4 mr-2" />
+                        Sign In to Translate
+                      </Button>
+                      ) : (
                       <Button
                         onClick={translateCaption}
                         disabled={isTranslating || !originalText.trim()}
@@ -379,6 +392,7 @@ export default function Captions() {
                           </>
                         )}
                       </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -461,7 +475,7 @@ export default function Captions() {
                   <p className="text-gray-300 leading-relaxed">
                     Our advanced AI understands context, tone, and cultural nuances to deliver
                     high-quality translations perfect for social media and marketing content.
-                    {user ? ' Sign in to save your translation history.' : ' Sign in to save your translations and access history.'}
+                    {user ? ' Your translations can be saved to your history.' : ' Sign in to translate, save your work, and access history.'}
                   </p>
                 </div>
               </div>
