@@ -11,9 +11,8 @@ const MAX_SEGMENT_CHARS = 90;
 const MIN_SEGMENT_CHARS = 18;
 const MIN_SEGMENT_WORDS = 3;
 const FALLBACK_WORDS_PER_CUE = 8;
-// Short sample-style text (NOT instructions) so auto mode keeps Arabic in Arabic
-// script instead of romanizing it. Long instruction prompts make Whisper loop.
-const BILINGUAL_STYLE_PROMPT = 'Hello everyone. مرحبا بكم.';
+// No prompt is ever sent: any prompt biases Whisper toward one language and it
+// silently skips speech in the other (tested on mixed English/Arabic audio).
 
 export default async function(req) {
   try {
@@ -82,7 +81,6 @@ export default async function(req) {
     const transcription = await openai.audio.transcriptions.create({
       file: fileForOpenAI,
       model: 'whisper-1',
-      ...(requestedLanguage ? {} : { prompt: BILINGUAL_STYLE_PROMPT }),
       temperature: 0,
       response_format: 'verbose_json',
       timestamp_granularities: ['word', 'segment'],
