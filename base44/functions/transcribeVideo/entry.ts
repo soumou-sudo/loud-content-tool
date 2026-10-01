@@ -85,15 +85,24 @@ export default async function(req) {
       ...(requestedLanguage ? {} : { prompt: BILINGUAL_STYLE_PROMPT }),
       temperature: 0,
       response_format: 'verbose_json',
-      timestamp_granularities: ['segment'],
+      timestamp_granularities: ['word', 'segment'],
       ...(requestedLanguage ? { language: requestedLanguage } : {}),
     });
 
-    const rawSegments = dropHallucinatedSegments(transcription.segments || []);
-    const normalizedSegments = ensureMixedLanguageSegments(rawSegments);
-    const smartSegments = splitOverlongSegments(buildSmartSegments(normalizedSegments));
-    const withoutRepeats = dropRepeatedSegments(smartSegments);
-    const segments = wordsPerSegment > 0 ? splitSegmentsByWordCount(withoutRepeats, wordsPerSegment) : withoutRepeats;
+    const allSegments = transcription.segments || [];
+    const rawSegments = dropHallucinatedSegments(allSegments);
+    const timedWords = buildTimedWords(transcription.words || [], allSegments, rawSegments);
+    let segments;
+    if (timedWords.length) {
+      // Word-level timing: lines break on real pauses in the audio.
+      const cues = wordsPerSegment > 0 ? chunkWordsByCount(timedWords, wordsPerSegment) : buildPauseAwareCues(timedWords);
+      segments = dropRepeatedSegments(cues.map(wordsToCue).map((cue, i, arr) => extendCue(cue, arr[i + 1])));
+    } else {
+      const normalizedSegments = ensureMixedLanguageSegments(rawSegments);
+      const smartSegments = splitOverlongSegments(buildSmartSegments(normalizedSegments));
+      const withoutRepeats = dropRepeatedSegments(smartSegments);
+      segments = wordsPerSegment > 0 ? splitSegmentsByWordCount(withoutRepeats, wordsPerSegment) : withoutRepeats;
+    }
     const finalSegments = segments.length > 0
       ? segments
       : buildFallbackSegments(transcription.text, transcription.duration);
@@ -267,20 +276,133 @@ function splitIntoReadablePieces(text, duration) {
   });
 }
 
-// Whisper marks looped/hallucinated audio with a poor average logprob or a high
-// no-speech probability, and repeated text inflates the compression ratio.
+// Only drop a segment when Whisper is confident it is NOT speech (silence that
+// also decoded poorly) or it is an obvious runaway loop. Checking each signal
+// on its own was discarding real speech, which caused missing/cut-off parts.
 function dropHallucinatedSegments(rawSegments) {
   return rawSegments.filter((segment) => {
     const noSpeechProb = Number(segment.no_speech_prob);
     const avgLogprob = Number(segment.avg_logprob);
     const compressionRatio = Number(segment.compression_ratio);
 
-    if (Number.isFinite(noSpeechProb) && noSpeechProb > 0.6) return false;
-    if (Number.isFinite(avgLogprob) && avgLogprob < -1) return false;
-    if (Number.isFinite(compressionRatio) && compressionRatio > 2.4) return false;
-
+    if (noSpeechProb > 0.6 && avgLogprob < -1) return false;
+    if (compressionRatio > 3) return false;
     return true;
   });
+}
+
+const CUE_PAUSE = 0.45;          // natural breath / phrase pause
+const CUE_SENTENCE_PAUSE = 0.15; // small pause is enough after a sentence end
+const CUE_MAX_DURATION = 5.5;
+const CUE_MAX_CHARS = 84;
+const CUE_MIN_DISPLAY = 0.9;
+
+// Words from Whisper carry exact timing but no punctuation; segment text has
+// punctuation. Align them so cues get punctuated text with real timings, and
+// remove words that belong to dropped (hallucinated) segments.
+function buildTimedWords(rawWords, allSegments, keptSegments) {
+  const kept = new Set(keptSegments);
+  const words = rawWords
+    .map((w) => ({ text: String(w.word || '').trim(), start: Number(w.start) || 0, end: Number(w.end) || 0 }))
+    .filter((w) => w.text && w.end >= w.start);
+  const result = [];
+  let pointer = 0;
+
+  for (const segment of allSegments) {
+    const group = [];
+    while (pointer < words.length && (words[pointer].start + words[pointer].end) / 2 <= Number(segment.end) + 0.05) {
+      group.push(words[pointer]);
+      pointer += 1;
+    }
+    if (!kept.has(segment)) continue;
+    const tokens = String(segment.text || '').trim().split(/\s+/).filter(Boolean);
+    group.forEach((word, i) => {
+      result.push({ ...word, text: tokens.length === group.length ? tokens[i] : word.text });
+    });
+  }
+  while (pointer < words.length) result.push(words[pointer++]);
+  return result.map((w) => ({ ...w, language: inferLanguageFromText(w.text) }));
+}
+
+function cueChars(words) {
+  return words.reduce((sum, w) => sum + w.text.length + 1, 0);
+}
+
+function buildPauseAwareCues(words) {
+  // 1) Break into phrases at real pauses, sentence ends and language switches.
+  const phrases = [];
+  let current = [words[0]];
+  for (let i = 1; i < words.length; i += 1) {
+    const prev = words[i - 1];
+    const word = words[i];
+    const gap = word.start - prev.end;
+    const sentenceEnd = /[.!?؟…]$/.test(prev.text);
+    const langSwitch = prev.language && word.language && prev.language !== word.language;
+    if (gap >= CUE_PAUSE || (sentenceEnd && gap >= CUE_SENTENCE_PAUSE) || langSwitch) {
+      phrases.push(current);
+      current = [word];
+    } else {
+      current.push(word);
+    }
+  }
+  phrases.push(current);
+
+  // 2) Split phrases that are too long at the best natural point.
+  const cues = phrases.flatMap(splitLongCue);
+
+  // 3) Merge tiny fragments into a neighbour when the speaker barely paused.
+  const merged = [];
+  for (const cue of cues) {
+    const prev = merged[merged.length - 1];
+    const tiny = cue.length < 2 || cueChars(cue) < 12;
+    if (prev && tiny && cue[0].start - prev[prev.length - 1].end < 0.6 &&
+        !/[.!?؟…]$/.test(prev[prev.length - 1].text) &&
+        cueChars(prev) + cueChars(cue) <= CUE_MAX_CHARS &&
+        cue[cue.length - 1].end - prev[0].start <= CUE_MAX_DURATION) {
+      merged[merged.length - 1] = [...prev, ...cue];
+    } else {
+      merged.push(cue);
+    }
+  }
+  return merged;
+}
+
+function splitLongCue(words) {
+  const duration = words[words.length - 1].end - words[0].start;
+  if (words.length < 4 || (duration <= CUE_MAX_DURATION && cueChars(words) <= CUE_MAX_CHARS)) return [words];
+
+  const total = cueChars(words);
+  let bestIndex = Math.floor(words.length / 2);
+  let bestScore = -Infinity;
+  let leftChars = 0;
+  for (let i = 0; i < words.length - 1; i += 1) {
+    leftChars += words[i].text.length + 1;
+    if (i < 1 || i > words.length - 3) continue;
+    const gap = Math.max(0, words[i + 1].start - words[i].end);
+    const punct = /[.!?؟…]$/.test(words[i].text) ? 3 : /[,،;:]$/.test(words[i].text) ? 1.5 : 0;
+    const balance = Math.abs(leftChars - (total - leftChars)) / total;
+    const score = gap * 8 + punct - balance * 2.5;
+    if (score > bestScore) { bestScore = score; bestIndex = i; }
+  }
+  return [...splitLongCue(words.slice(0, bestIndex + 1)), ...splitLongCue(words.slice(bestIndex + 1))];
+}
+
+function chunkWordsByCount(words, count) {
+  const chunks = [];
+  for (let i = 0; i < words.length; i += count) chunks.push(words.slice(i, i + count));
+  return chunks;
+}
+
+function wordsToCue(words) {
+  const text = words.map((w) => w.text).join(' ');
+  return { start: words[0].start, end: words[words.length - 1].end, text, language: inferLanguageFromText(text) };
+}
+
+// Keep each line on screen long enough to read, without overlapping the next.
+function extendCue(cue, next) {
+  const limit = next ? next.start - 0.05 : cue.end + 1;
+  const end = Math.max(cue.end, Math.min(cue.start + CUE_MIN_DISPLAY, limit), Math.min(cue.end + 0.25, limit));
+  return { ...cue, end };
 }
 
 // Collapses the runaway "same line over and over" tail Whisper produces when it
