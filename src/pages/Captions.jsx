@@ -10,7 +10,6 @@ import { translateText } from "@/functions/translateText";
 import {
   Languages,
   Type,
-  Sparkles,
   Copy,
   RotateCcw,
   Save,

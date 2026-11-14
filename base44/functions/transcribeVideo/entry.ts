@@ -15,6 +15,12 @@ const DAILY_TRANSCRIPTION_LIMIT = 30;
 // No prompt is ever sent: any prompt biases Whisper toward one language and it
 // silently skips speech in the other (tested on mixed English/Arabic audio).
 
+
+// LOUD team only: transcription runs on LOUD's OpenAI key, so accounts outside
+// these email domains are refused even when signed in.
+const ALLOWED_DOMAINS = ['loud.ae'];
+const isAllowed = (user) => ALLOWED_DOMAINS.some((d) => String(user?.email || '').toLowerCase().endsWith(`@${d}`));
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -22,6 +28,9 @@ export default async function(req) {
 
     if (!user) {
       return Response.json({ error: 'Please sign in before starting transcription.' }, { status: 401 });
+    }
+    if (!isAllowed(user)) {
+      return Response.json({ error: 'This tool is only available to the LOUD team.' }, { status: 403 });
     }
 
     const contentType = req.headers.get('content-type') || '';
@@ -96,24 +105,6 @@ export default async function(req) {
     }
 
     const safeName = mediaFile.name || filename;
-
-    // Optional: ElevenLabs Scribe gives the most accurate dialect transcription
-    // with word timings. Used only when an ELEVENLABS_API_KEY secret is set;
-    // otherwise (or if it fails) Whisper runs as before.
-    const scribe = await transcribeWithScribe(mediaFile, safeName, requestedLanguage);
-    if (scribe) {
-      const segments = wordsPerSegment > 0 ? chunkWordsByCount(scribe.words, wordsPerSegment) : buildPauseAwareCues(scribe.words);
-      const cues = dropRepeatedSegments(segments.map(wordsToCue).map((cue, i, arr) => extendCue(cue, arr[i + 1])));
-      return Response.json({
-        success: true,
-        subtitles: toSrt(cues),
-        duration: scribe.duration,
-        language: scribe.language,
-        words: scribe.words.map(({ text, start, end }) => ({ text, start, end })),
-        reference_text: '',
-        engine: 'scribe',
-      });
-    }
 
     const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
 
@@ -303,45 +294,6 @@ async function readCapped(response, maxBytes) {
     parts.push(value);
   }
   return new Blob(parts);
-}
-
-async function transcribeWithScribe(mediaFile, filename, languageCode) {
-  const apiKey = secrets.get('ELEVENLABS_API_KEY');
-  if (!apiKey) return null;
-  try {
-    const form = new FormData();
-    form.append('file', mediaFile, filename);
-    form.append('model_id', 'scribe_v1');
-    form.append('timestamps_granularity', 'word');
-    form.append('tag_audio_events', 'false');
-    if (languageCode) form.append('language_code', languageCode);
-
-    const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-      method: 'POST',
-      headers: { 'xi-api-key': apiKey },
-      body: form,
-    });
-    if (!res.ok) {
-      console.error('Scribe transcription failed with status', res.status);
-      return null;
-    }
-    const data = await res.json();
-    const words = (data.words || [])
-      .filter((w) => w.type === 'word' && String(w.text || '').trim())
-      .map((w) => {
-        const text = String(w.text).trim();
-        return { text, start: Number(w.start) || 0, end: Number(w.end) || 0, language: inferLanguageFromText(text) };
-      });
-    if (!words.length) return null;
-    return {
-      words,
-      language: data.language_code || 'unknown',
-      duration: words[words.length - 1].end,
-    };
-  } catch (error) {
-    console.error('Scribe transcription error:', error?.message || error);
-    return null;
-  }
 }
 
 function toSrt(cues) {

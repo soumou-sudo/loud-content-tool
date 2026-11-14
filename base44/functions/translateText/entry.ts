@@ -51,11 +51,28 @@ const SUBTITLE_MODEL = 'claude_opus_5_5';
 const CHUNK_TARGET_WORDS = 220;
 const CHUNK_CONCURRENCY = 4;
 
+
+// LOUD team only: translation runs on LOUD's OpenAI key, so accounts outside
+// these email domains are refused even when signed in.
+const ALLOWED_DOMAINS = ['loud.ae'];
+const isAllowed = (user) => ALLOWED_DOMAINS.some((d) => String(user?.email || '').toLowerCase().endsWith(`@${d}`));
+const DAILY_TRANSLATION_LIMIT = 300;
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Your session has expired. Please sign in again to translate.' }, { status: 401 });
+    if (!isAllowed(user)) return Response.json({ error: 'This tool is only available to the LOUD team.' }, { status: 403 });
+
+    // Per-user daily allowance, recorded first and counted second so parallel requests can't slip past.
+    const usage = base44.asServiceRole.entities.TranslationUsage;
+    const usageRecord = await usage.create({ user_id: user.id });
+    const usedToday = await usage.count({ user_id: user.id, created_date: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() } });
+    if (usedToday > DAILY_TRANSLATION_LIMIT) {
+      await usage.delete(usageRecord.id).catch(() => null);
+      return Response.json({ error: `You have reached the limit of ${DAILY_TRANSLATION_LIMIT} translations per 24 hours. Please try again later.` }, { status: 429 });
+    }
 
     const body = await req.json();
 
