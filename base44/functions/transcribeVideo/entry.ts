@@ -11,6 +11,7 @@ const MAX_SEGMENT_CHARS = 90;
 const MIN_SEGMENT_CHARS = 18;
 const MIN_SEGMENT_WORDS = 3;
 const FALLBACK_WORDS_PER_CUE = 8;
+const DAILY_TRANSCRIPTION_LIMIT = 30;
 // No prompt is ever sent: any prompt biases Whisper toward one language and it
 // silently skips speech in the other (tested on mixed English/Arabic audio).
 
@@ -75,6 +76,23 @@ export default async function(req) {
 
     if (mediaFile.size > MAX_FILE_SIZE_BYTES) {
       return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
+    }
+
+    // Per-user allowance: the paid transcription providers run on the app
+    // owner's keys, so each user gets a fixed number of runs per 24 hours.
+    // The run is recorded first and counted second, so parallel requests
+    // cannot slip past the limit together. Users cannot edit these records.
+    const usage = base44.asServiceRole.entities.TranscriptionUsage;
+    const usageRecord = await usage.create({ user_id: user.id });
+    const usedToday = await usage.count({
+      user_id: user.id,
+      created_date: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+    });
+    if (usedToday > DAILY_TRANSCRIPTION_LIMIT) {
+      await usage.delete(usageRecord.id);
+      return Response.json({
+        error: `You have reached the limit of ${DAILY_TRANSCRIPTION_LIMIT} transcriptions per 24 hours. Please try again later.`,
+      }, { status: 429 });
     }
 
     const safeName = mediaFile.name || filename;
@@ -207,6 +225,13 @@ async function assertPublicHttpsUrl(url) {
   if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')) {
     throw new Error('Invalid uploaded file URL.');
   }
+
+  // Uploads only ever live on the platform's own file storage. Accepting no
+  // other host (on every redirect hop too) means the address checks below
+  // cannot be bypassed with a DNS name the caller controls.
+  const isPlatformStorage = hostname === 'base44.app' || hostname.endsWith('.base44.app') ||
+    hostname === 'media.base44.com';
+  if (!isPlatformStorage) throw new Error('Invalid uploaded file URL.');
 
   if (isBlockedAddress(hostname)) throw new Error('Invalid uploaded file URL.');
 

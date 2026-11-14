@@ -35,9 +35,14 @@ const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl =
 }
 
 const getAppParams = () => {
+	// The backend address comes only from the build, never from the page URL or
+	// browser storage: a crafted link must not be able to redirect signed-in
+	// traffic (and the access token) to another host. Also drop any value an
+	// older version of the app may have stored.
+	if (!isNode) storage.removeItem("base44_server_url");
 	return {
 		appId: getAppParamValue("app_id", { defaultValue: import.meta.env.VITE_BASE44_APP_ID }),
-		serverUrl: getAppParamValue("server_url", { defaultValue: import.meta.env.VITE_BASE44_BACKEND_URL }),
+		serverUrl: import.meta.env.VITE_BASE44_BACKEND_URL || "https://base44.app",
 		token: getAppParamValue("access_token", { removeFromUrl: true }),
 		fromUrl: getAppParamValue("from_url", { defaultValue: window.location.href }),
 		functionsVersion: getAppParamValue("functions_version"),
