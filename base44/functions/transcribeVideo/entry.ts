@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.61';
 import OpenAI from 'npm:openai@4.57.0';
 import { toFile } from 'npm:openai@4.57.0/uploads';
 import { secrets } from 'base44:runtime';
@@ -58,7 +58,12 @@ export default async function(req) {
           return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
         }
 
-        const blob = await fetched.blob();
+        // Read with a hard cap: a missing or false content-length header must
+        // not let a huge download exhaust the function's memory.
+        const blob = await readCapped(fetched, MAX_FILE_SIZE_BYTES);
+        if (!blob) {
+          return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
+        }
         const detectedType = mimeType || blob.type || 'application/octet-stream';
         mediaFile = new File([blob], filename, { type: detectedType });
       }
@@ -72,20 +77,59 @@ export default async function(req) {
       return Response.json({ error: 'File is too large. Please upload a file under 25MB.' }, { status: 400 });
     }
 
-    const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
     const safeName = mediaFile.name || filename;
-    const fileForOpenAI = await toFile(mediaFile, safeName);
 
+    // Optional: ElevenLabs Scribe gives the most accurate dialect transcription
+    // with word timings. Used only when an ELEVENLABS_API_KEY secret is set;
+    // otherwise (or if it fails) Whisper runs as before.
+    const scribe = await transcribeWithScribe(mediaFile, safeName, requestedLanguage);
+    if (scribe) {
+      const segments = wordsPerSegment > 0 ? chunkWordsByCount(scribe.words, wordsPerSegment) : buildPauseAwareCues(scribe.words);
+      const cues = dropRepeatedSegments(segments.map(wordsToCue).map((cue, i, arr) => extendCue(cue, arr[i + 1])));
+      return Response.json({
+        success: true,
+        subtitles: toSrt(cues),
+        duration: scribe.duration,
+        language: scribe.language,
+        words: scribe.words.map(({ text, start, end }) => ({ text, start, end })),
+        reference_text: '',
+        engine: 'scribe',
+      });
+    }
+
+    const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
+
+    // Two passes on the same audio, in parallel:
+    // - whisper-1 gives exact word timings (gpt-4o models cannot).
+    // - gpt-4o-transcribe gives a more accurate text, especially for Arabic
+    //   dialects; the subtitle step uses it to correct misheard words.
     // No `prompt` is sent: Whisper treats the prompt as preceding transcript text,
     // which makes it echo/loop and duplicate segments until the end of the file.
-    const transcription = await openai.audio.transcriptions.create({
-      file: fileForOpenAI,
-      model: 'whisper-1',
-      temperature: 0,
-      response_format: 'verbose_json',
-      timestamp_granularities: ['word', 'segment'],
-      ...(requestedLanguage ? { language: requestedLanguage } : {}),
-    });
+    const [whisperResult, referenceResult] = await Promise.allSettled([
+      openai.audio.transcriptions.create({
+        file: await toFile(mediaFile, safeName),
+        model: 'whisper-1',
+        temperature: 0,
+        response_format: 'verbose_json',
+        timestamp_granularities: ['word', 'segment'],
+        ...(requestedLanguage ? { language: requestedLanguage } : {}),
+      }),
+      openai.audio.transcriptions.create({
+        file: await toFile(mediaFile, safeName),
+        model: 'gpt-4o-transcribe',
+        response_format: 'text',
+        ...(requestedLanguage ? { language: requestedLanguage } : {}),
+      }),
+    ]);
+
+    if (whisperResult.status === 'rejected') throw whisperResult.reason;
+    const transcription = whisperResult.value;
+    const referenceText = referenceResult.status === 'fulfilled'
+      ? String(typeof referenceResult.value === 'string' ? referenceResult.value : referenceResult.value?.text || '').trim()
+      : '';
+    if (referenceResult.status === 'rejected') {
+      console.error('Reference transcription failed:', referenceResult.reason?.message || referenceResult.reason);
+    }
 
     const allSegments = transcription.segments || [];
     const rawSegments = dropHallucinatedSegments(allSegments);
@@ -104,16 +148,14 @@ export default async function(req) {
     const finalSegments = segments.length > 0
       ? segments
       : buildFallbackSegments(transcription.text, transcription.duration);
-    const srtContent = finalSegments
-      .map((segment, index) => `${index + 1}\n${formatTime(segment.start)} --> ${formatTime(segment.end)}\n${segment.text.trim()}\n`)
-      .join('\n')
-      .trim();
-
     return Response.json({
       success: true,
-      subtitles: srtContent,
+      subtitles: toSrt(finalSegments),
       duration: transcription.duration || 0,
       language: transcription.language || 'unknown',
+      words: timedWords.map(({ text, start, end }) => ({ text, start, end })),
+      reference_text: referenceText,
+      engine: 'whisper',
     });
   } catch (error) {
     console.error('Transcription error:', error);
@@ -207,12 +249,81 @@ function isBlockedIpv4(address) {
     a >= 224;
 }
 
+const LANGUAGE_CODES = {
+  english: 'en', arabic: 'ar', french: 'fr', spanish: 'es', german: 'de', italian: 'it',
+  portuguese: 'pt', russian: 'ru', turkish: 'tr', persian: 'fa', urdu: 'ur', hindi: 'hi',
+  chinese: 'zh', japanese: 'ja', korean: 'ko', filipino: 'tl', indonesian: 'id',
+};
+
 function normalizeRequestedLanguage(language) {
   const value = String(language || '').trim().toLowerCase();
   if (!value || value === 'auto') return '';
-  if (value === 'english' || value === 'en') return 'en';
-  if (value === 'arabic' || value === 'ar') return 'ar';
-  return '';
+  if (LANGUAGE_CODES[value]) return LANGUAGE_CODES[value];
+  return Object.values(LANGUAGE_CODES).includes(value) ? value : '';
+}
+
+async function readCapped(response, maxBytes) {
+  if (!response.body) return null;
+  const reader = response.body.getReader();
+  const parts = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    parts.push(value);
+  }
+  return new Blob(parts);
+}
+
+async function transcribeWithScribe(mediaFile, filename, languageCode) {
+  const apiKey = secrets.get('ELEVENLABS_API_KEY');
+  if (!apiKey) return null;
+  try {
+    const form = new FormData();
+    form.append('file', mediaFile, filename);
+    form.append('model_id', 'scribe_v1');
+    form.append('timestamps_granularity', 'word');
+    form.append('tag_audio_events', 'false');
+    if (languageCode) form.append('language_code', languageCode);
+
+    const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey },
+      body: form,
+    });
+    if (!res.ok) {
+      console.error('Scribe transcription failed with status', res.status);
+      return null;
+    }
+    const data = await res.json();
+    const words = (data.words || [])
+      .filter((w) => w.type === 'word' && String(w.text || '').trim())
+      .map((w) => {
+        const text = String(w.text).trim();
+        return { text, start: Number(w.start) || 0, end: Number(w.end) || 0, language: inferLanguageFromText(text) };
+      });
+    if (!words.length) return null;
+    return {
+      words,
+      language: data.language_code || 'unknown',
+      duration: words[words.length - 1].end,
+    };
+  } catch (error) {
+    console.error('Scribe transcription error:', error?.message || error);
+    return null;
+  }
+}
+
+function toSrt(cues) {
+  return cues
+    .map((segment, index) => `${index + 1}\n${formatTime(segment.start)} --> ${formatTime(segment.end)}\n${segment.text.trim()}\n`)
+    .join('\n')
+    .trim();
 }
 
 // Whisper sometimes returns one very long segment for a whole passage. Merging
@@ -680,11 +791,11 @@ function splitSegmentsByWordCount(segments, wordsPerSegment) {
 }
 
 function formatTime(seconds) {
-  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-  const hours = Math.floor(safeSeconds / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-  const secs = Math.floor(safeSeconds % 60);
-  const milliseconds = Math.floor((safeSeconds % 1) * 1000);
+  const totalMs = Math.round((Number.isFinite(seconds) ? Math.max(0, seconds) : 0) * 1000);
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const secs = Math.floor((totalMs % 60000) / 1000);
+  const milliseconds = totalMs % 1000;
 
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(milliseconds).padStart(3, '0')}`;
 }

@@ -27,18 +27,40 @@ import { translateText } from "@/functions/translateText";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { base44 } from "@/api/base44Client";
+import { extractSpeechAudio } from "@/lib/audioExtract";
 
-const MAX_FILE_SIZE_MB = 25; // OpenAI Whisper limit
+// Large videos are fine: only a compressed speech track (about 240 KB per
+// minute) is uploaded, so the transcription service's 25 MB cap is never the
+// limit. 2 GB is the practical ceiling for decoding in a browser tab.
+const MAX_FILE_SIZE_MB = 2048;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const TRANSCRIBE_LIMIT_BYTES = 25 * 1024 * 1024;
 
 const AGENT_STEPS = [
-  { id: 1, message: "Initializing AI transcription agent..." },
-  { id: 2, message: "Uploading file to OpenAI processing servers...", action: 'upload' },
-  { id: 3, message: "Extracting audio track..." },
-  { id: 4, message: "Running OpenAI Whisper speech-to-text model...", action: 'transcribe' },
-  { id: 5, message: "Analyzing speech patterns and creating timestamps..." },
-  { id: 6, message: "Converting transcription to SRT subtitle format..." },
-  { id: 7, message: "Finalizing subtitles and preparing download..." },
+  { id: 1, message: "Extracting and compressing the audio track" },
+  { id: 2, message: "Uploading audio" },
+  { id: 3, message: "Transcribing speech with word-level timing" },
+  { id: 4, message: "Cutting subtitles by meaning and timing" },
+];
+
+const LANGUAGES = [
+  { value: "english", label: "English" },
+  { value: "arabic", label: "Arabic" },
+  { value: "french", label: "French" },
+  { value: "spanish", label: "Spanish" },
+  { value: "german", label: "German" },
+  { value: "italian", label: "Italian" },
+  { value: "portuguese", label: "Portuguese" },
+  { value: "russian", label: "Russian" },
+  { value: "turkish", label: "Turkish" },
+  { value: "persian", label: "Persian (Farsi)" },
+  { value: "urdu", label: "Urdu" },
+  { value: "hindi", label: "Hindi" },
+  { value: "chinese", label: "Chinese" },
+  { value: "japanese", label: "Japanese" },
+  { value: "korean", label: "Korean" },
+  { value: "filipino", label: "Filipino (Tagalog)" },
+  { value: "indonesian", label: "Indonesian" },
 ];
 
 export default function Subtitles() {
@@ -61,6 +83,11 @@ export default function Subtitles() {
   const [segmentationMode, setSegmentationMode] = useState("auto");
   const [wordsPerSentence, setWordsPerSentence] = useState(8);
   const [sectionsCount, setSectionsCount] = useState(10);
+  const [timedWords, setTimedWords] = useState(null);
+  const [referenceText, setReferenceText] = useState("");
+  const [generatedSrt, setGeneratedSrt] = useState("");
+  const [stepDetail, setStepDetail] = useState("");
+  const [notice, setNotice] = useState("");
 
   const supportedFormats = [
     'video/mp4', 'video/mov', 'video/avi', 'video/x-msvideo', 'video/quicktime', 'video/x-matroska',
@@ -72,6 +99,8 @@ export default function Subtitles() {
     { value: "egyptian", label: "Egyptian" },
     { value: "levantine", label: "Levantine (Shami)" },
     { value: "gulf", label: "Gulf (Khaleeji)" },
+    { value: "emirati", label: "Emirati" },
+    { value: "saudi", label: "Saudi" },
     { value: "maghrebi", label: "Maghrebi (Morocco/Algeria/Tunisia)" },
     { value: "iraqi", label: "Iraqi" },
     { value: "sudanese", label: "Sudanese" },
@@ -115,24 +144,32 @@ export default function Subtitles() {
   };
 
   const validateAndSetFile = (selectedFile) => {
-    if (!supportedFormats.includes(selectedFile.type)) {
-      setError("Please upload a supported video or audio format (MP4, MOV, AVI, MKV, MP3, WAV, M4A, OGG)");
+    const type = selectedFile.type || "";
+    const isMedia = supportedFormats.includes(type) || type.startsWith("video/") || type.startsWith("audio/") ||
+      /\.(mp4|mov|m4v|mkv|avi|webm|mp3|wav|m4a|aac|ogg|opus|flac)$/i.test(selectedFile.name || "");
+    if (!isMedia) {
+      setError("Please upload a video or audio file (MP4, MOV, MKV, WEBM, MP3, WAV, M4A, AAC, OGG, FLAC).");
       return;
     }
     if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
-      setError(`File is too large. Please upload a file under ${MAX_FILE_SIZE_MB} MB for OpenAI Whisper processing.`);
+      setError(`File is too large. Please upload a file under ${MAX_FILE_SIZE_MB / 1024} GB.`);
       return;
     }
     setFile(selectedFile);
     setError(null);
   };
 
-  const runAgentStep = async (stepIndex) => {
-    setAgentStep(stepIndex);
-    const step = AGENT_STEPS[stepIndex];
-    if (!step.action) {
-      await new Promise(res => setTimeout(res, 1500));
-    }
+  const buildSmartSubtitles = async ({ words, reference, sourceLanguage, target }) => {
+    const response = await translateText({
+      mode: "subtitles",
+      target_language: target,
+      dialect,
+      words,
+      reference_text: reference,
+      source_language: sourceLanguage,
+    });
+    if (response.data?.error) throw new Error(response.data.error);
+    return response.data.subtitles;
   };
 
   const processVideo = async () => {
@@ -144,52 +181,80 @@ export default function Subtitles() {
 
     setProcessing(true);
     setAgentStep(0);
+    setStepDetail("");
     setError(null);
+    setNotice("");
     setSubtitles("");
     setEditedSubtitles("");
+    setGeneratedSrt("");
+    setTimedWords(null);
+    setReferenceText("");
     setTranscriptionInfo(null);
 
     try {
-      // Step 1: Initialize
-      await runAgentStep(0);
+      // 1. Extract a compact speech track in the browser.
+      let uploadFile = file;
+      try {
+        const extracted = await extractSpeechAudio(file, ({ stage, progress }) => {
+          setStepDetail(stage === "encoding" ? `Compressing ${progress}%` : stage === "decoding" ? "Decoding audio" : "Reading file");
+        });
+        uploadFile = extracted.file;
+      } catch (extractError) {
+        // Fall back to the original file only when it is small enough to send as is.
+        if (file.size > TRANSCRIBE_LIMIT_BYTES) throw extractError;
+        console.warn("Audio extraction failed, sending the original file:", extractError);
+      }
+      if (uploadFile.size > TRANSCRIBE_LIMIT_BYTES) {
+        throw new Error("This recording is too long to transcribe in one go (about 100 minutes maximum). Please split it into shorter parts.");
+      }
 
-      // Step 2: Upload and process
-      await runAgentStep(1);
+      // 2. Upload.
+      setAgentStep(1);
+      setStepDetail("");
+      const { file_url } = await UploadFile({ file: uploadFile });
 
-      // Step 3-4: Extract audio and transcribe
-      await runAgentStep(2);
-
-      // Upload file first to get a URL (works for both video and audio)
-      const { file_url } = await UploadFile({ file });
-
-      // Proceed to transcription
-      await runAgentStep(3);
+      // 3. Transcribe.
+      setAgentStep(2);
       const response = await transcribeVideo({
         file_url,
-        filename: file.name,
-        mime_type: file.type,
+        filename: uploadFile.name,
+        mime_type: uploadFile.type,
         transcription_language: transcriptionLanguage,
         words_per_segment: segmentationMode === "fixed" ? Number(wordsPerSentence) || 0 : 0,
       });
+      if (response.data.error) throw new Error(response.data.error);
+      const result = response.data;
+      const words = Array.isArray(result.words) && result.words.length ? result.words : null;
+      setTimedWords(words);
+      setReferenceText(result.reference_text || "");
 
-      if (response.data.error) {
-        throw new Error(response.data.error);
+      // 4. Cut subtitles by meaning (smart mode). The quick pause-based cut
+      //    from step 3 is kept as a fallback.
+      let srt = result.subtitles;
+      if (segmentationMode === "auto" && words) {
+        setAgentStep(3);
+        try {
+          srt = await buildSmartSubtitles({
+            words,
+            reference: result.reference_text || "",
+            sourceLanguage: result.language,
+            target: "original",
+          });
+        } catch (cutError) {
+          console.error("Smart cutting failed:", cutError);
+          setNotice("Smart cutting was unavailable, so these lines were cut on speech pauses only. Use Translate or try again for the full treatment.");
+        }
       }
 
-      // Step 5-7: Format and finalize
-      await runAgentStep(4);
-      await runAgentStep(5);
-      await runAgentStep(6);
-
-      const result = response.data;
-      setSubtitles(result.subtitles);
-      setEditedSubtitles(result.subtitles);
+      setAgentStep(AGENT_STEPS.length);
+      setSubtitles(srt);
+      setEditedSubtitles(srt);
+      setGeneratedSrt(srt);
       setTranscriptionInfo({
         duration: result.duration,
         language: result.language,
-        segments: result.subtitles.split('\n\n').length
+        segments: srt.split('\n\n').length
       });
-
     } catch (error) {
       console.error("Transcription error:", error);
       const apiMsg = error?.response?.data?.error || error?.response?.data?.details?.message;
@@ -200,6 +265,7 @@ export default function Subtitles() {
       setAgentStep(-1);
     } finally {
       setProcessing(false);
+      setStepDetail("");
     }
   };
 
@@ -240,6 +306,10 @@ export default function Subtitles() {
     setIsTranslatingSub(false);
     setTranscriptionLanguage("auto");
     setSegmentationMode("auto");
+    setTimedWords(null);
+    setReferenceText("");
+    setGeneratedSrt("");
+    setNotice("");
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -249,15 +319,31 @@ export default function Subtitles() {
     setError(null);
 
     try {
-      const response = await translateText({
-        mode: "srt",
-        text: editedSubtitles,
-        target_language: translateTarget,
-        dialect,
-      });
-      if (response.data.error) throw new Error(response.data.error);
+      // Untouched subtitles are rebuilt from the timed speech, so each translated
+      // line is cut and timed to the words it translates. Hand-edited SRTs are
+      // translated line by line instead, keeping the user's own cuts.
+      const handEdited = editedSubtitles.trim() !== generatedSrt.trim();
+      let translated;
+      if (timedWords && !handEdited) {
+        translated = await buildSmartSubtitles({
+          words: timedWords,
+          reference: referenceText,
+          sourceLanguage: transcriptionInfo?.language || "",
+          target: translateTarget,
+        });
+      } else {
+        const response = await translateText({
+          mode: "srt",
+          text: editedSubtitles,
+          target_language: translateTarget === "original" ? "english" : translateTarget,
+          dialect,
+        });
+        if (response.data.error) throw new Error(response.data.error);
+        translated = response.data.translation;
+      }
 
-      setEditedSubtitles(response.data.translation);
+      setEditedSubtitles(translated);
+      setGeneratedSrt(translated);
       setIsEditing(false);
     } catch (err) {
       console.error("Translation error:", err);
@@ -379,11 +465,12 @@ export default function Subtitles() {
           <Cpu className="w-4 h-4 text-yellow-400" />
         </div>
         <div>
-          <h4 className="font-semibold text-white">OpenAI Whisper Agent</h4>
-          <p className="text-sm text-gray-400">Transcribing your file...</p>
+          <h4 className="font-semibold text-white">Subtitle agent</h4>
+          <p className="text-sm text-gray-400">Working on your file...</p>
         </div>
       </div>
 
+      {stepDetail && <p className="text-xs text-gray-400 -mt-2 mb-2">{stepDetail}</p>}
       {AGENT_STEPS.map((step, index) => {
         const isCompleted = agentStep > index;
         const isInProgress = agentStep === index;
@@ -458,7 +545,7 @@ export default function Subtitles() {
                     Choose File
                   </Button>
                   <div className="mt-4 text-sm text-gray-500">
-                    Supported: MP4, MOV, AVI, MKV, MP3, WAV, M4A, OGG. Max size: {MAX_FILE_SIZE_MB}MB
+                    Supported: MP4, MOV, MKV, WEBM, MP3, WAV, M4A, AAC, OGG, FLAC. Max size: {MAX_FILE_SIZE_MB / 1024} GB
                   </div>
                 </div>
               ) : (
@@ -496,8 +583,9 @@ export default function Subtitles() {
                           </SelectTrigger>
                           <SelectContent className="bg-black border-gray-700 text-white">
                             <SelectItem value="auto">Auto detect</SelectItem>
-                            <SelectItem value="english">English</SelectItem>
-                            <SelectItem value="arabic">Arabic</SelectItem>
+                            {LANGUAGES.map((l) => (
+                              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-gray-500 mt-2">Choose a language up front or leave it on auto detect.</p>
@@ -531,7 +619,7 @@ export default function Subtitles() {
                         </div>
                       ) : (
                         <p className="text-sm text-gray-400 leading-relaxed">
-                          AI smart auto splits subtitles based on pauses, stops, breath moments, sentence flow, and language changes for more natural caption timing.
+                          AI smart auto cuts one-line subtitles on meaning, pauses and reading speed, corrects misheard words, and times each line to the exact words spoken.
                         </p>
                       )}
                     </div>
@@ -555,12 +643,16 @@ export default function Subtitles() {
                     </div>
                   )}
 
+                  {notice && (
+                    <p className="text-xs text-yellow-300/80 leading-relaxed">{notice}</p>
+                  )}
+
                   {!processing && !subtitles && (
                     isAuthenticated ? (
                       <Button onClick={processVideo} 
                               className="w-full btn-primary font-medium h-11 px-4">
                         <Mic className="w-4 h-4 mr-2" />
-                        Transcribe with OpenAI Whisper
+                        Generate subtitles
                       </Button>
                     ) : (
                       <Button onClick={() => base44.auth.redirectToLogin(window.location.href)}
@@ -658,8 +750,12 @@ export default function Subtitles() {
                             <SelectValue placeholder="Target language" />
                           </SelectTrigger>
                           <SelectContent className="bg-black border-gray-700 text-white">
-                            <SelectItem value="arabic">Arabic</SelectItem>
-                            <SelectItem value="english">English</SelectItem>
+                            {timedWords && editedSubtitles.trim() === generatedSrt.trim() && (
+                              <SelectItem value="original">Original language (re-cut)</SelectItem>
+                            )}
+                            {LANGUAGES.map((l) => (
+                              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -697,7 +793,9 @@ export default function Subtitles() {
                       </div>
                     </div>
                     <p className="text-xs text-gray-500 mt-2">
-                      Timestamps remain untouched; only subtitle text is translated.
+                      {timedWords && editedSubtitles.trim() === generatedSrt.trim()
+                        ? "Each translated line is re-cut and re-timed to the words it translates."
+                        : "You edited these subtitles, so your cuts and timings are kept and only the text is translated."}
                     </p>
                   </div>
 
@@ -738,7 +836,7 @@ export default function Subtitles() {
                 <div className="flex min-h-[320px] flex-col items-center justify-center px-5 py-12 text-center text-muted-foreground">
                   <div className="mb-6 border border-border p-4"><Mic className="h-7 w-7 text-primary" strokeWidth={1.4} /></div>
                   <p>Upload a video or audio file to extract subtitles</p>
-                  <p className="text-sm mt-2 text-gray-600">Powered by OpenAI Whisper</p>
+                  <p className="text-sm mt-2 text-gray-600">Videos up to 2 GB. Only the audio is uploaded.</p>
                 </div>
               )}
             </CardContent>
